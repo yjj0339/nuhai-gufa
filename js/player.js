@@ -187,10 +187,12 @@ export function doAttack() {
   if (tool === 'rod') {
     if (!p.swimming) { startFishing(); return; }
   }
-  // 长矛/手钩 → 攻击
-  if (tool === 'spear' || tool === 'spear_metal' || tool === 'hook') {
-    const dmg = eff.spearDmg(tool === 'spear_metal' ? 2 : 1);
-    const shark = sharkNearPlayer(tool === 'spear_metal' ? 85 : 64);
+  // 长矛/战刃/手钩 → 攻击
+  if (tool === 'spear' || tool === 'spear_metal' || tool === 'blade' || tool === 'hook') {
+    const base = tool === 'blade' ? 3 : tool === 'spear_metal' ? 2 : 1;
+    const dmg = eff.spearDmg(base);
+    const reach = tool === 'blade' || tool === 'spear_metal' ? 95 : 64;
+    const shark = sharkNearPlayer(reach);
     if (shark) { hitShark(shark, dmg); spawnHitStar(shark.x, shark.y); return; }
     // 海鸥（在头顶低空）
     for (const g of S.entities.gulls) {
@@ -407,7 +409,7 @@ export function drawPlayer(ctx, t) {
   ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(hx, hy); ctx.stroke();
   // 手中的工具
   if (swing > 0 || p.tool) {
-    const toolEmoji = { hook: '🪝', spear: '🔱', spear_metal: '⚔️', hammer: '🔨', rod: '🎣' }[p.tool] || '';
+  const toolEmoji = { hook: '🪝', spear: '🔱', spear_metal: '⚔️', blade: '🗡️', hammer: '🔨', rod: '🎣' }[p.tool] || '';
     if (toolEmoji && (swing > 0.05 || p.tool === 'rod' || p.tool === 'hook')) {
       ctx.font = '13px system-ui'; ctx.textAlign = 'center';
       ctx.fillText(toolEmoji, hx + Math.cos(handAng) * 5, hy + Math.sin(handAng) * 5 + 4);

@@ -1,5 +1,5 @@
 // ============ 天气 / 昼夜 / 风向 ============
-import { S, rand, randi, toast, clamp } from './state.js';
+import { S, rand, randi, toast, clamp, bus } from './state.js';
 import { DAY_LEN, CFG } from './data.js';
 import { sfx } from './audio.js';
 
@@ -56,6 +56,7 @@ export function updateWeather(dt) {
   if (S.time.frac >= 1) {
     S.time.frac -= 1;
     S.time.day++;
+    bus.emit('newDay');
     toast(`第 ${S.time.day} 天开始了`, '📅');
     sfx.bell();
   }
@@ -75,6 +76,25 @@ export function updateWeather(dt) {
     if (W._thT <= 0) { W._thT = rand(5, 13); W.flash = 0.9; sfx.thunder(); S.shakeT = 0.3; }
   }
   if (W.flash > 0) W.flash -= dt * 1.6;
+  // 流星：生成 + 推进
+  const nf = nightFactor();
+  if (nf > 0.9 && S.mode === 'play') {
+    const isShower = S.meteorShower > 0;
+    if (!isShower && Math.random() < 0.0025) {
+      S.meteorShower = 18;
+      toast('✨ 流星雨来了！每颗流星都带来一点祝福', '✨');
+      sfx.quest();
+    }
+    const w = window.innerWidth, h = window.innerHeight;
+    if (isShower && Math.random() < 0.22) spawnMeteor(w, h);
+    else if (!isShower && Math.random() < 0.002) spawnMeteor(w, h);
+  }
+  for (const m of S.meteors) {
+    m.t -= dt;
+    m.x += Math.cos(m.a) * 380 * dt; m.y += Math.sin(m.a) * 380 * dt;
+  }
+  S.meteors = S.meteors.filter(m => m.t > 0);
+  if (S.meteorShower > 0) S.meteorShower -= dt;
   // 暴风雨：未抛锚且帆未收 → 有概率咬/损坏？改为：风暴中木筏摇晃，玩家行走速度略降
 }
 
@@ -179,28 +199,39 @@ export function drawWeatherOverlay(ctx, view, t) {
       ctx.globalAlpha = 1;
     }
     // 月亮
-    const mx = w * 0.82, my = h * 0.16;
-    ctx.fillStyle = `rgba(250,245,220,${0.95 * nf})`;
+    const mx = w * 0.82, my = h * 0.16;    ctx.fillStyle = `rgba(250,245,220,${0.95 * nf})`;
     ctx.beginPath(); ctx.arc(mx, my, 26, 0, 6.29); ctx.fill();
     ctx.fillStyle = `rgba(210,205,180,${0.5 * nf})`;
     ctx.beginPath(); ctx.arc(mx - 8, my - 4, 5, 0, 6.29); ctx.fill();
     ctx.beginPath(); ctx.arc(mx + 7, my + 6, 3.4, 0, 6.29); ctx.fill();
-    // 流星许愿
-    if (nf > 0.9 && Math.random() < 0.002) {
-      S.meteor = { x: Math.random() * w, y: Math.random() * h * 0.3, t: 0.8, a: rand(2.4, 2.9) };
-      if (S.meteor) toast('流星划过夜空！', '💫');
-    }
+    // 流星生成（夜晚偶发 / 流星雨）——推进与生成在 updateWeather
   }
-  if (S.meteor) {
-    const m = S.meteor;
-    m.t -= 1 / 60;
-    m.x += Math.cos(m.a) * 14; m.y += Math.sin(m.a) * 14;
+  // 流星绘制
+  for (const m of S.meteors) {
     ctx.save();
-    ctx.strokeStyle = `rgba(255,250,220,${m.t})`;
+    ctx.strokeStyle = `rgba(255,250,220,${Math.max(0, m.t)})`;
     ctx.lineWidth = 2.4;
-    ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(m.x - Math.cos(m.a) * 60, m.y - Math.sin(m.a) * 60); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(m.x, m.y);
+    ctx.lineTo(m.x - Math.cos(m.a) * 64, m.y - Math.sin(m.a) * 64);
+    ctx.stroke();
+    if (m.wish) {
+      ctx.fillStyle = `rgba(255,235,150,${Math.max(0, m.t)})`;
+      ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+      ctx.fillText('✦', m.x, m.y - 4);
+    }
     ctx.restore();
-    if (m.t <= 0) S.meteor = null;
+  }
+}
+function spawnMeteor(w, h) {
+  S.meteors.push({ x: Math.random() * w * 0.8, y: Math.random() * h * 0.3, t: 0.8, a: rand(2.35, 2.75), wish: Math.random() < (S.meteorShower > 0 ? 0.7 : 0.6) });
+  const m = S.meteors[S.meteors.length - 1];
+  if (m.wish && S.mode === 'play') {
+    S.stats.meteorWish++;
+    const kind = randi(0, 2);
+    if (kind === 0) { S.player.hunger = clamp(S.player.hunger + 7, 0, 100); }
+    else if (kind === 1) { S.player.thirst = clamp(S.player.thirst + 7, 0, 100); }
+    else { S.player.hp = clamp(S.player.hp + 5, 0, 100); }
   }
 }
 function drawClouds(ctx, view, t) {

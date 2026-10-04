@@ -4,7 +4,8 @@ import { TILE, CFG, BUILDINGS, ITEMS, SAVE_KEY } from './data.js';
 import { initAudio, resumeAudio, sfx, updateAmbient } from './audio.js';
 import { updateWorld, drawOcean, drawFloaters, drawIslands, nearestIsland } from './world.js';
 import { drawRaft, updateBuildings, drawGhost, demolish, tileAt, canPlace, place } from './raft.js';
-import { updateSharks, updateGulls, updateFish, updateHook, updateParticles, updateUnderNodes, drawUnder, drawOver, updateMerchant, updateDolphin, updateVortices, updateWrecks, drawNewUnder, drawNewOver } from './entities.js';
+import { updateSharks, updateGulls, updateFish, updateHook, updateParticles, updateUnderNodes, drawUnder, drawOver, updateMerchant, updateDolphin, updateVortices, updateWrecks, updateWhale, drawNewUnder, drawNewOver } from './entities.js';
+import { updateBargain, stopBargain, drawBargain } from './bargain.js';
 import { updatePlayer, drawPlayer, doHookAt, updateIslandNodes, damagePlayer, doUse, doAttack } from './player.js';
 import { updateFishing, drawFishing } from './fishing.js';
 import { initWeather, updateWeather, drawWeatherOverlay, nightFactor } from './weather.js';
@@ -102,8 +103,8 @@ window.addEventListener('keydown', e => {
   if (k === 'b') { openPanel('build'); }
   if (k === 'i' || k === 'r') { openPanel('inv'); }
   if (k === 'escape') { if (S.ui.buildSel) { S.ui.buildSel = null; updateBuildBar(); } else if (S.ui.panel) closePanel(); }
-  if (k >= '1' && k <= '5') {
-    const order = ['hook', 'spear', 'spear_metal', 'hammer', 'rod'];
+  if (k >= '1' && k <= '6') {
+    const order = ['hook', 'spear', 'spear_metal', 'blade', 'hammer', 'rod'];
     S.player.tool = order[+k - 1];
   }
   if (k === 'a' || e.code === 'ArrowLeft') S.input.sailL = true;
@@ -168,6 +169,9 @@ function loop(nowMs) {
     updateDolphin(dt);
     updateVortices(dt);
     updateWrecks(dt);
+    updateWhale(dt);
+    updateBargain(dt);
+    if (S.bargain && S.input.attack) { S.input.attack = false; stopBargain(); }
     updateAmbient(dt);
     questAcc += dt;
     if (questAcc > 1) { questAcc = 0; updateQuests(); }
@@ -237,6 +241,7 @@ function render(dt) {
 
   drawWeatherOverlay(ctx, view, S.t);
   drawFishing(ctx, view);
+  drawBargain(ctx, view);
 }
 
 // ---------------- 自测模式 ----------------
@@ -379,6 +384,51 @@ async function selfTest() {
     const lvBefore = S.level;
     const okLoad = loadGame();
     log('v1.1存档兼容', okLoad && S.level === lvBefore && S.upgrades !== undefined);
+    // ---- v1.2 强化系统 ----
+    const { rollDaily, dailyProg } = await import('./daily.js');
+    S.time.day = 3;
+    rollDaily(false);
+    const dl = S.daily;
+    log('每日挑战生成', !!dl.id && dl.goal >= 1, `${dl.id} ${dl.prog}/${dl.goal}`);
+    for (let i = 0; i < dl.goal; i++) dailyProg(dl.id);
+    log('每日挑战完成', dl.done && S.stats.dailyDone === 1);
+    // 锻造巨鲨战刃
+    S.inv.slots[11] = { id: 'shark_tooth', n: 10 };
+    S.inv.slots[12] = { id: 'ingot', n: 10 };
+    log('锻造巨鲨战刃', craft('gear_blade') && countItem('blade') === 1 && S.stats.gearBlade === 1);
+    // 鲨鱼皮帆（不可重复锻造）
+    S.inv.slots[13] = { id: 'cloth', n: 20 };
+    S.inv.slots[14] = { id: 'rope', n: 10 };
+    log('鞣制鲨鱼皮帆', craft('gear_sail') && S.gear.sharkSail === true && eff.sailSpeed() > CFG.sailSpeed * 1.2);
+    log('重复鞣制被拒', !craft('gear_sail'));
+    // 观鲸
+    const { updateWhale } = await import('./entities.js');
+    S.whale = { x: 0, y: 100, vx: 40, t: 0, spoutT: 9, seen: false };
+    updateWhale(0.02);
+    log('观鲸事件', S.stats.whale === 1);
+    S.whale = null;
+    // 流星雨
+    S.time.frac = 0.9; S.meteorShower = 6; S.meteors = [];
+    const { updateWeather: updateWeather2 } = await import('./weather.js');
+    for (let i = 0; i < 60; i++) updateWeather2(0.06);
+    log('流星雨许愿', S.stats.meteorWish >= 1, `wish=${S.stats.meteorWish}`);
+    S.time.frac = 0.4;
+    // 砍价
+    const { spawnMerchant: sm2 } = await import('./entities.js');
+    sm2();
+    const m2 = S.entities.merchant;
+    const { startBargain, stopBargain } = await import('./bargain.js');
+    log('发起砍价', startBargain() && !!S.bargain);
+    S.bargain.pos = 0.5;
+    stopBargain();
+    log('砍价成功7.5折', m2.discount === 0.75 && S.stats.bargainWins === 1);
+    S.inv.slots[14] = { id: 'coin', n: 100 };
+    const cost0 = Math.max(1, Math.round(m2.stock[0].coin * 0.75));
+    const coinBefore2 = countItem('coin');
+    const { buyStock: bs } = await import('./inv.js');
+    bs(0);
+    log('折扣生效', countItem('coin') === coinBefore2 - cost0, `花${cost0}币`);
+    S.entities.merchant = null;
 
     T.pass = T.steps.every(s => s.ok) && ERRS.length === 0;
     T.errors = [...ERRS];

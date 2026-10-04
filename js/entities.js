@@ -3,6 +3,7 @@ import { S, rand, randi, dist, clamp, key, toast } from './state.js';
 import { TILE, CFG, ITEMS, FISH, SHOP_STOCK } from './data.js';
 import { addItem, grantLoot } from './inv.js';
 import { grantXP, lucky } from './upgrades.js';
+import { dailyProg } from './daily.js';
 import { tileAt, edgeTiles, hasBuilding } from './raft.js';
 import { floaterLoot } from './world.js';
 import { sfx } from './audio.js';
@@ -58,6 +59,7 @@ export function tryTakeUnderNode() {
   best.taken = true; best.respawn = rand(60, 110);
   S.stats.diveTake++;
   grantXP(3);
+  dailyProg('dive');
   sfx.pickup();
   spawnBubbles(p.x, p.y, 6);
   return true;
@@ -207,6 +209,7 @@ export function hitShark(s, dmg = 1) {
       addItem('shark_tooth', 1, true);
       toast('击败了鲨鱼！获得鲨鱼肉 ×2、鲨鱼牙 ×1', '🏆');
       grantXP(25);
+      dailyProg('shark');
       sfx.achv();
     }
   } else if (!s.boss) {
@@ -216,6 +219,7 @@ export function hitShark(s, dmg = 1) {
     S.stats.sharkFlee++;
     toast('鲨鱼被击退了！', '⚔️');
     grantXP(10);
+    dailyProg('shark');
     sfx.sharkFlee();
   } else {
     spawnHitStar(s.x, s.y - 20);
@@ -370,6 +374,7 @@ export function updateHook(dt) {
           if (lucky()) { for (const k in loot) loot[k] *= 2; toast('🍀 幸运一钩，双倍收获！', '🍀'); }
           grantLoot(loot);
           grantXP(3);
+          dailyProg('loot');
           sfx.hookGot();
         }
       }
@@ -742,6 +747,32 @@ export function tryTakeWreckNode() {
   return false;
 }
 
+// ================= 观鲸 =================
+export function updateWhale(dt) {
+  S.whaleTimer -= dt;
+  const w = S.whale;
+  if (w) {
+    w.t += dt; w.x += w.vx * dt;
+    w.spoutT -= dt;
+    if (w.spoutT <= 0) { w.spoutT = 2.6; spawnSplash(w.x - w.vx * 0.4, w.y, 5); }
+    if (!w.seen && dist(w.x, w.y, 0, 0) < 640) {
+      w.seen = true;
+      S.stats.whale = 1;
+      grantXP(15);
+      toast('🐋 一头巨鲸浮出海面喷水，正好被你看见！', '🐋');
+      sfx.levelup();
+    }
+    if (w.t > 34) S.whale = null;
+  } else if (S.whaleTimer <= 0 && S.mode === 'play') {
+    S.whaleTimer = rand(260, 420);
+    if (Math.random() < 0.6) {
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      S.whale = { x: -dir * 720, y: rand(-360, 360), vx: dir * rand(38, 55), t: 0, spoutT: 1, seen: false };
+      toast('远处海面似乎有什么巨大的东西在移动…', '🐋');
+    }
+  }
+}
+
 // ================= 新实体渲染 =================
 export function drawNewUnder(ctx, t) {
   // 沉船
@@ -784,6 +815,29 @@ export function drawNewUnder(ctx, t) {
   }
 }
 export function drawNewOver(ctx, t) {
+  // 鲸鱼（在漩涡/海豚之下先画）
+  const wh = S.whale;
+  if (wh) {
+    ctx.save();
+    ctx.translate(wh.x, wh.y);
+    const bob = Math.sin(wh.t * 1.1) * 6;
+    ctx.fillStyle = 'rgba(30,60,90,0.22)';
+    ctx.beginPath(); ctx.ellipse(0, 10, 92, 22, 0, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#3E5A78';
+    ctx.beginPath(); ctx.ellipse(0, bob, 88, 22, 0, Math.PI, 0); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(70, bob - 2); ctx.quadraticCurveTo(96, bob - 16, 106, bob - 4); ctx.lineTo(94, bob + 5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(220,235,245,0.5)';
+    ctx.beginPath(); ctx.ellipse(-10, bob - 6, 34, 7, 0.1, 0, 6.29); ctx.fill();
+    if (wh.spoutT > 2.0) {
+      ctx.strokeStyle = 'rgba(240,250,255,0.85)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath(); ctx.moveTo(30, bob - 18);
+        ctx.quadraticCurveTo(30 + i * 10, bob - 36, 30 + i * 17, bob - 46);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
   // 漩涡
   for (const v of S.entities.vortices) {
     ctx.save();

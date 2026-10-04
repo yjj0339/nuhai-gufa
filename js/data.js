@@ -52,6 +52,7 @@ export const ITEMS = {
   hook:        { name: '手钩',     emoji: '🪝', type: 'tool', stack: 1, desc: '甩出去钩住漂流物拉回来。' },
   spear:       { name: '木矛',     emoji: '🔱', type: 'tool', stack: 1, desc: '近战武器，能赶走鲨鱼。' },
   spear_metal: { name: '金属矛',   emoji: '⚔️', type: 'tool', stack: 1, desc: '更锋利更耐用，鲨鱼的噩梦。' },
+  blade:       { name: '巨鲨战刃', emoji: '🗡️', type: 'tool', stack: 1, desc: '巨鲨之牙锻成的利刃，伤害惊人。' },
   hammer:      { name: '锤子',     emoji: '🔨', type: 'tool', stack: 1, desc: '建造与拆除建筑必备。' },
   rod:         { name: '鱼竿',     emoji: '🎣', type: 'tool', stack: 1, desc: '在筏边钓鱼，夜里鱼更肥。' },
   // 特殊
@@ -73,6 +74,18 @@ export const RECIPES = [
   { id: 'hammer',     out: { hammer: 1 },     in: { wood: 4, scrap: 2, rope: 1 },            desc: '锤子' },
   { id: 'rod',        out: { rod: 1 },        in: { wood: 5, rope: 3, nail: 1 },             desc: '鱼竿' },
   { id: 'seed_berry', out: { seed_berry: 1 }, in: { berry: 2 },                              desc: '留种' },
+  { id: 'gear_blade', out: { blade: 1 },      in: { shark_tooth: 2, ingot: 2, wood: 2 },     desc: '巨鲨战刃（伤害3，巨鲨掉牙锻造）' },
+  { id: 'gear_sail',  out: {},                in: { shark_tooth: 3, cloth: 4, rope: 2 },     gear: 'sharkSail', desc: '鲨鱼皮帆：航行速度 +25%（消耗鲨鱼牙鞣制）' },
+];
+
+// ---------------- 每日挑战 ----------------
+export const DAILY_POOL = [
+  { id: 'loot',   name: '拾荒达人', desc: '打捞 8 件漂流物', goal: 8 },
+  { id: 'fish',   name: '今日渔获', desc: '钓上 3 条鱼', goal: 3 },
+  { id: 'cook',   name: '大厨当班', desc: '烹饪 3 份食物', goal: 3 },
+  { id: 'shark',  name: '斗鲨操练', desc: '击退或猎杀 1 条鲨鱼', goal: 1 },
+  { id: 'dive',   name: '深潜训练', desc: '潜水采集 5 次', goal: 5 },
+  { id: 'harvest',name: '田间管理', desc: '收获 1 次作物', goal: 1 },
 ];
 
 // ---------------- 建筑 ----------------
@@ -180,6 +193,12 @@ export const ACHIEVEMENTS = [
   { id: 'a_dolph', name: '海豚之友',     desc: '与海豚同游累计 30 秒', check: s => s.stats.dolphinTime >= 30 },
   { id: 'a_vortex',name: '漩涡淘金者',   desc: '从漩涡中心取得宝藏',   check: s => s.stats.vortexLoot >= 1 },
   { id: 'a_wreck', name: '沉船猎手',     desc: '搜刮完一艘沉船',       check: s => s.stats.wrecks >= 1 },
+  { id: 'a_blade', name: '鲨牙之刃',     desc: '锻造巨鲨战刃',         check: s => s.stats.gearBlade >= 1 },
+  { id: 'a_ssail', name: '乘风破浪',     desc: '鞣制鲨鱼皮帆',         check: s => s.gear.sharkSail === true },
+  { id: 'a_daily5',name: '持之以恒',     desc: '完成 5 次每日挑战',    check: s => s.stats.dailyDone >= 5 },
+  { id: 'a_whale', name: '鲸奇相遇',     desc: '目睹一次鲸鱼巡游',     check: s => s.stats.whale >= 1 },
+  { id: 'a_meteor',name: '对流星许愿',   desc: '流星雨夜许下愿望',     check: s => s.stats.meteorWish >= 1 },
+  { id: 'a_barg',  name: '砍价鬼才',     desc: '在商筏砍价成功',       check: s => s.stats.bargainWins >= 1 },
   { id: 'a_end',   name: '灯塔之约',     desc: '完成主线：获救',       check: s => s.stats.rescued >= 1 },
 ];
 

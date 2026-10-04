@@ -3,6 +3,7 @@ import { S, rand, randi, clamp, toast } from './state.js';
 import { FISH, CFG } from './data.js';
 import { addItem } from './inv.js';
 import { grantXP, lucky } from './upgrades.js';
+import { dailyProg } from './daily.js';
 import { sfx } from './audio.js';
 
 // bar: 0~1 垂直条；fishY 鱼位置(0~1)；barY 玩家条中心(0~1)；progress
@@ -73,6 +74,7 @@ export function stopFishing(success) {
     S.stats.fish++;
     if (f.id === 'fish_lantern') S.stats.lantern = 1;
     grantXP(8);
+    dailyProg('fish');
     toast(`钓到了 ${f.name}！`, '🐟');
     sfx.fishOn();
     sfx.levelup();

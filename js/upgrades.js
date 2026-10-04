@@ -20,7 +20,7 @@ export const eff = {
   hookRange: () => CFG.hookRange * (1 + 0.18 * lv('hook')),
   oxygenMax: () => CFG.oxygenMax * (1 + 0.25 * lv('oxygen')),
   swimSpeed: () => CFG.swimSpeed * (1 + 0.14 * lv('swim')),
-  sailSpeed: () => CFG.sailSpeed * (1 + 0.16 * lv('sail')),
+  sailSpeed: () => CFG.sailSpeed * (1 + 0.16 * lv('sail')) * (S.gear.sharkSail ? 1.25 : 1),
   hungerRate: () => CFG.hungerRate * (1 - 0.14 * lv('stomach')),
   spearDmg: base => base + lv('spear'),
 };

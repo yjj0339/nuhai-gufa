@@ -123,12 +123,24 @@ export function rollChest() {
   return got;
 }
 
-// 合成（手工）
+// 合成（手工，支持装备型配方）
 export function craft(recipeId) {
   const r = RECIPES.find(x => x.id === recipeId);
-  if (!r || !hasAll(r.in)) { sfx.error(); return false; }
+  if (!r) { sfx.error(); return false; }
+  if (r.gear && S.gear[r.gear]) { toast('已经拥有这件装备了', 'ℹ️'); return false; }
+  if (!hasAll(r.in)) { sfx.error(); return false; }
   takeAll(r.in);
-  for (const [id, n] of Object.entries(r.out)) addItem(id, n, true);
+  if (r.gear) {
+    S.gear[r.gear] = true;
+    toast(r.id === 'gear_sail' ? '⛵ 鲨鱼皮帆鞣制完成！航行速度 +25%' : '装备锻造完成！', '⬆️');
+    sfx.craft();
+    bus.emit('inv');
+    return true;
+  }
+  for (const [id, n] of Object.entries(r.out)) {
+    addItem(id, n, true);
+    if (id === 'blade') S.stats.gearBlade = 1;
+  }
   sfx.craft();
   toast(`合成 ${ITEMS[Object.keys(r.out)[0]].name}`, '✅');
   return true;
@@ -154,13 +166,14 @@ export function buyStock(idx) {
   if (!m) { toast('商筏已经走了', '💨'); return false; }
   const st = m.stock[idx];
   if (!st) return false;
-  if (countItem('coin') < st.coin) { toast('古币不够！', '🪙'); sfx.error(); return false; }
-  removeItem('coin', st.coin);
+  const cost = Math.max(1, Math.round(st.coin * (m.discount || 1)));
+  if (countItem('coin') < cost) { toast('古币不够！', '🪙'); sfx.error(); return false; }
+  removeItem('coin', cost);
   addItem(st.id, 1, true);
   S.stats.trades++;
   S.stats.bought++;
   grantXP(10);
-  toast(`买到 ${ITEMS[st.id].name}`, ITEMS[st.id].emoji);
+  toast(`买到 ${ITEMS[st.id].name}${cost !== st.coin ? `（${cost} 币）` : ''}`, ITEMS[st.id].emoji);
   sfx.craft();
   bus.emit('inv');
   return true;

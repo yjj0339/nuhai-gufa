@@ -3,6 +3,8 @@ import { S, key, rand, dist, clamp, toast } from './state.js';
 import { TILE, BUILDINGS, STATION_RECIPES, CFG, ITEMS } from './data.js';
 import { hasAll, takeAll, countItem, addItem, grantLoot } from './inv.js';
 import { grantXP } from './upgrades.js';
+import { dailyProg } from './daily.js';
+import { bus } from './state.js';
 import { sfx } from './audio.js';
 
 export function initRaft() {
@@ -128,6 +130,7 @@ export function updateBuildings(dt) {
       S.stats.cooked++;
       if (c.out.ingot) S.stats.ingots += c.out.ingot;
       grantXP(5);
+      dailyProg('cook');
       sfx.levelup();
     }
   }
@@ -184,6 +187,7 @@ export function farmInteract(t) {
     else { addItem('potato', 2, true); toast('收获 土豆 ×2', '🥔'); if (Math.random() < 0.5) addItem('seed_potato', 1, true); }
     S.stats.harvest += 3;
     grantXP(6);
+    dailyProg('harvest');
     f.crop = null; f.done = false; f.t = 0;
     sfx.pickup();
   } else {
@@ -203,6 +207,7 @@ export function sleepBed() {
   if (frac < 0.24 || frac > 0.78) {
     S.time.day++; S.time.frac = 0.26;
     S.stats.days = Math.max(S.stats.days, S.time.day - 1);
+    bus.emit('newDay');
     toast('睡了个好觉，新的一天开始了', '🌅');
     sfx.quest();
     return true;

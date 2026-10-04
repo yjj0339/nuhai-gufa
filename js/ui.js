@@ -12,7 +12,7 @@ import { currentQuest } from './quests.js';
 import { sfx, setVolumes, initAudio, resumeAudio } from './audio.js';
 
 const $ = s => document.querySelector(s);
-const TOOL_ORDER = ['hook', 'spear', 'spear_metal', 'hammer', 'rod'];
+const TOOL_ORDER = ['hook', 'spear', 'spear_metal', 'blade', 'hammer', 'rod'];
 
 export function initUI() {
   const root = $('#ui');
@@ -73,6 +73,7 @@ export function initUI() {
   bus.on('toast', () => renderToasts());
   bus.on('openStation', () => openPanel('station'));
   bus.on('openPanel', name => openPanel(name));
+  bus.on('closePanel', () => closePanel());
   setInterval(() => { if (S.ui.panel) renderPanel(); }, 700);
 
   renderHotbar();
@@ -112,6 +113,10 @@ export function handleAction(a, btn) {
       else if (a.startsWith('setQual:')) { S.settings.quality = a.slice(8); renderPanel(); }
       else if (a === 'toggleShake') { S.settings.shake = !S.settings.shake; renderPanel(); }
       else if (a === 'saveNow') { saveGame(); renderPanel(); }
+      else if (a === 'bargain') {
+        import('./bargain.js').then(m => m.startBargain());
+        renderPanel();
+      }
       else if (a === 'toStorage') { moveItem(+btn.dataset.idx, 'to'); renderPanel(); }
       else if (a === 'fromStorage') { moveItem(+btn.dataset.idx, 'from'); renderPanel(); }
       break;
@@ -161,6 +166,11 @@ function moveItem(idx, dir) {
 // ---------------- 世界点击（钩子投掷 / 建造放置） ----------------
 function handleWorldTap(e) {
   if (S.mode !== 'play') return;
+  // 砍价小游戏进行中：点击=停针
+  if (S.bargain) {
+    import('./bargain.js').then(m => m.stopBargain());
+    return;
+  }
   const view = window._view;
   if (!view) return;
   const wx = (e.clientX - view.w / 2) / view.zoom + view.x;
@@ -205,7 +215,9 @@ export function updateHUD() {
   $('#txtWind').textContent = `🌬️ ${dirs[d8]}风 ${(S.wind.strength * 100 | 0)}%`;
   // 任务追踪
   const q = currentQuest();
-  $('#questTracker').innerHTML = q ? `<b>📜 ${q.name}</b><span>${q.desc}</span>` : `<b>🎉 主线已全部完成</b>`;
+  const dl = S.daily;
+  const dailyHtml = dl && dl.id ? `<div class="daily"><b>📌 ${dl.name}</b><span>${dl.desc}（${dl.prog}/${dl.goal}）${dl.done ? '✅' : ''}</span></div>` : '';
+  $('#questTracker').innerHTML = (q ? `<div><b>📜 ${q.name}</b><span>${q.desc}</span></div>` : `<div><b>🎉 主线已全部完成</b></div>`) + dailyHtml;
   $('#btnDive').innerHTML = p.swimming ? '🧗<small>上浮</small>' : '🤿<small>潜/爬</small>';
   // 靠岛提示
   const near = nearestIsland();
@@ -367,13 +379,16 @@ function renderPanel() {
   else if (which === 'craft') {
     html += `<div class="rows">`;
     for (const r of RECIPES) {
-      const can = Object.entries(r.in).every(([id, n]) => countItem(id) >= n);
+      const gearOwned = r.gear && S.gear[r.gear];
+      const can = !gearOwned && Object.entries(r.in).every(([id, n]) => countItem(id) >= n);
       const outId = Object.keys(r.out)[0];
-      html += `<div class="row">
-        <span class="em big">${ITEMS[outId].emoji}</span>
-        <div class="grow"><b>${ITEMS[outId].name} ×${r.out[outId]}</b><small>${r.desc}</small>
-          <div class="costs">${costHtml(r.in)}</div></div>
-        <button class="primary ${can ? '' : 'dis'}" data-a="craft:${r.id}" ${can ? '' : 'disabled'}>合成</button>
+      const outName = outId ? `${ITEMS[outId].name} ×${r.out[outId]}` : (r.gear === 'sharkSail' ? '鲨鱼皮帆（永久强化）' : '装备');
+      const outEm = outId ? ITEMS[outId].emoji : '⛵';
+      html += `<div class="row ${gearOwned ? 'done' : ''}">
+        <span class="em big">${outEm}</span>
+        <div class="grow"><b>${outName}</b><small>${r.desc}</small>
+          <div class="costs">${gearOwned ? '<span class="cost ok">✅已拥有</span>' : costHtml(r.in)}</div></div>
+        <button class="primary ${can ? '' : 'dis'}" data-a="craft:${r.id}" ${can ? '' : 'disabled'}>${gearOwned ? '已拥有' : '合成'}</button>
       </div>`;
     }
     html += `</div>`;
@@ -485,13 +500,18 @@ function renderPanel() {
     if (!m) {
       html += `<p class="hint">商筏已经远去了…等它下次到港吧</p>`;
     } else {
-      html += `<p class="hint">🪙 古币余额：<b>${countItem('coin')}</b> · 商筏停留 ${Math.ceil(m.life)} 秒<br>古币来源：漩涡宝藏、巨鲨战利品、沉船搜刮</p><div class="rows">`;
+      const disc = m.discount || 1;
+      const discTxt = disc < 1 ? `<b style="color:#3A9A4A">当前 ${disc * 10 | 0} 折</b>` : disc > 1 ? `<b style="color:#C05A4A">被砍崩了 ${(disc * 10) | 0} 折…</b>` : '原价';
+      html += `<p class="hint">🪙 古币余额：<b>${countItem('coin')}</b> · 商筏停留 ${Math.ceil(m.life)} 秒 · ${discTxt}<br>古币来源：漩涡宝藏、巨鲨战利品、沉船搜刮、每日挑战</p>
+        ${!m.bargained && !S.bargain ? `<button class="primary" style="width:100%;margin-bottom:8px" data-a="bargain">🤝 砍价（每桌仅一次，让指针停进绿区）</button>` : ''}
+        <div class="rows">`;
       m.stock.forEach((st, i) => {
-        const can = countItem('coin') >= st.coin;
+        const cost = Math.max(1, Math.round(st.coin * disc));
+        const can = countItem('coin') >= cost;
         html += `<div class="row">
           <span class="em big">${ITEMS[st.id].emoji}</span>
           <div class="grow"><b>${ITEMS[st.id].name}</b><small>${ITEMS[st.id].desc || ''}</small></div>
-          <span class="cost ${can ? 'ok' : 'lack'}">🪙${st.coin}</span>
+          <span class="cost ${can ? 'ok' : 'lack'}">🪙${cost}</span>
           <button class="primary ${can ? '' : 'dis'}" data-a="buyStock:${i}" ${can ? '' : 'disabled'}>买</button>
         </div>`;
       });
@@ -530,6 +550,10 @@ function renderPanel() {
       ['🚢', '搜刮沉船', st.wrecks],
       ['🐬', '海豚同游', Math.floor(st.dolphinTime) + ' 秒'],
       ['⛵', '累计航行', Math.floor(st.sailed) + ' 米'],
+      ['📌', '每日挑战', st.dailyDone + ' 次完成'],
+      ['🐋', '观鲸', st.whale + ' 次'],
+      ['✨', '流星许愿', st.meteorWish + ' 次'],
+      ['🤝', '砍价成功', st.bargainWins + ' 次'],
       ['💀', '倒下次数', st.deaths],
     ];
     html += `<div class="rows">`;

@@ -55,6 +55,8 @@ body.inMenu #ui > * { display: none !important; }
 }
 #questTracker b { color: #7A5A2A; font-size: 12px; }
 #questTracker span { color: #6A6A5A; }
+#questTracker .daily { margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(160, 140, 100, 0.4); }
+#questTracker .daily b { color: #2A7A9A; }
 
 /* ---------- 热键栏 ---------- */
 #hotbar {
