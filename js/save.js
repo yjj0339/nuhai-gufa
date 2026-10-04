@@ -27,6 +27,9 @@ export function saveGame(silent = false) {
     raft: [...S.raft.tiles.values()].map(t => ({ c: t.c, r: t.r, hp: t.hp, armor: t.armor, net: t.net, b: t.b ? { type: t.b.type } : null })),
     inv: S.inv.slots,
     storage: S.storage,
+    xp: S.xp, level: S.level, skillPts: S.skillPts,
+    upgrades: S.upgrades,
+    lastBossDay: S.lastBossDay,
     islands: S.islands.map(i => ({
       x: i.x, y: i.y, r: i.r, type: i.type, visited: i.visited,
       nodes: i.nodes.map(n => ({ kind: n.kind, x: n.x, y: n.y, hp: n.hp })),
@@ -69,6 +72,9 @@ export function loadGame() {
   while (S.inv.slots.length < 30) S.inv.slots.push(null);
   S.storage = (d.storage || []).map(s => s ? { ...s } : null);
   while (S.storage.length < 24) S.storage.push(null);
+  S.xp = d.xp || 0; S.level = d.level || 1; S.skillPts = d.skillPts || 0;
+  S.upgrades = d.upgrades || {};
+  S.lastBossDay = d.lastBossDay || 0;
   // 岛屿
   S.islands = (d.islands || []).map(i => ({
     x: i.x, y: i.y, r: i.r, type: i.type, visited: i.visited, id: ++S.islandMeta.counter,
@@ -83,6 +89,9 @@ export function loadGame() {
   // 实体重置
   S.entities.floaters = []; S.entities.sharks = []; S.entities.gulls = [];
   S.entities.fish = []; S.entities.parts = []; S.entities.bubbles = [];
+  S.entities.vortices = []; S.entities.wrecks = [];
+  S.entities.merchant = null; S.entities.dolphin = null;
+  S.merchantTimer = 160; S.wreckTimer = 200; S.vortexTimer = 240; S.dolphinTimer = 140;
   S.hook = null; S.fishing = null;
   initTransient();
   return true;
@@ -104,12 +113,16 @@ function initTransient() {
 
 export function newGame() {
   S.msg = [];
+  S.xp = 0; S.level = 1; S.skillPts = 0; S.upgrades = {};
+  S.lastBossDay = 0;
+  S.merchantTimer = 160; S.wreckTimer = 200; S.vortexTimer = 240; S.dolphinTimer = 140;
   S.time = { day: 1, frac: 0.28 };
   S.stats = {
     days: 1, collected: 0, fish: 0, cooked: 0, drank: 0, ingots: 0,
     sharkFlee: 0, sharkKill: 0, harvest: 0, islands: 0, chests: 0,
     sailed: 0, radioFixed: 0, rescued: 0, rainTime: 0, gullShoo: 0,
     diveTake: 0, tiles: 9, lantern: 0, deaths: 0, playTime: 0, lighthouse: 0,
+    bossKill: 0, trades: 0, dolphinTime: 0, vortexLoot: 0, wrecks: 0, bought: 0,
   };
   S.quests = { idx: 0, done: [] };
   S.achievements = new Set();

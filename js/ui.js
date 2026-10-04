@@ -1,10 +1,11 @@
 // ============ UI：HUD / 面板 / 手机操控 ============
 import { S, bus, toast, clamp, fmtTime } from './state.js';
-import { ITEMS, RECIPES, BUILDINGS, STATION_RECIPES, QUESTS, ACHIEVEMENTS, CFG, TILE } from './data.js';
-import { countItem, countTag, craft, startStationCook, addItem } from './inv.js';
+import { ITEMS, RECIPES, BUILDINGS, STATION_RECIPES, QUESTS, ACHIEVEMENTS, CFG, TILE, SELL_PRICES } from './data.js';
+import { countItem, countTag, craft, startStationCook, addItem, buyStock, sellItem } from './inv.js';
 import { canPlace, place, hasBuilding, findBuilding } from './raft.js';
 import { nearestIsland } from './world.js';
 import { consumeItem } from './player.js';
+import { UPG, lv, xpNeed } from './upgrades.js';
 import { saveGame, hasSave } from './save.js';
 import { WEATHER_NAMES, nightFactor } from './weather.js';
 import { currentQuest } from './quests.js';
@@ -21,6 +22,7 @@ export function initUI() {
     <div class="barRow"><span class="ico">❤️</span><div class="bar"><i id="barHp" style="background:#F0655A"></i></div><b id="txtHp"></b></div>
     <div class="barRow"><span class="ico">🍗</span><div class="bar"><i id="barHunger" style="background:#F2A24A"></i></div><b id="txtHunger"></b></div>
     <div class="barRow"><span class="ico">💧</span><div class="bar"><i id="barThirst" style="background:#4AB8E8"></i></div><b id="txtThirst"></b></div>
+    <div class="barRow"><span class="ico">⭐</span><div class="bar"><i id="barXp" style="background:#B886E8"></i></div><b id="txtXp"></b></div>
     <div id="envRow"><span id="txtDay">📅</span><span id="txtClock"></span><span id="txtWeather"></span><span id="txtWind"></span></div>
   </div>
   <div id="questTracker" class="glass"></div>
@@ -29,9 +31,11 @@ export function initUI() {
       <button data-a="inv" title="背包">🎒</button>
       <button data-a="craft" title="合成">🛠️</button>
       <button data-a="build" title="建造">🏗️</button>
+      <button data-a="upg" title="升级">⭐</button>
       <button data-a="quests" title="任务">📜</button>
       <button data-a="achv" title="成就">🏆</button>
       <button data-a="map" title="海图">🗺️</button>
+      <button data-a="stats" title="统计">📊</button>
       <button data-a="help" title="帮助">❓</button>
       <button data-a="settings" title="设置">⚙️</button>
     </div>
@@ -68,6 +72,7 @@ export function initUI() {
   bus.on('inv', () => { renderHotbar(); if (S.ui.panel) renderPanel(); });
   bus.on('toast', () => renderToasts());
   bus.on('openStation', () => openPanel('station'));
+  bus.on('openPanel', name => openPanel(name));
   setInterval(() => { if (S.ui.panel) renderPanel(); }, 700);
 
   renderHotbar();
@@ -85,6 +90,8 @@ export function handleAction(a, btn) {
     case 'map': openPanel('map'); break;
     case 'help': openPanel('help'); break;
     case 'settings': openPanel('settings'); break;
+    case 'upg': openPanel('upg'); break;
+    case 'stats': openPanel('stats'); break;
     case 'buildCancel': S.ui.buildSel = null; updateBuildBar(); break;
     case 'use': S.input.use = true; break;
     case 'attack': S.input.attack = true; S.input.fishingHold = true; break;
@@ -97,6 +104,9 @@ export function handleAction(a, btn) {
       else if (a.startsWith('buildSel:')) { S.ui.buildSel = a.slice(9); openPanel(null); updateBuildBar(); }
       else if (a.startsWith('cook:')) cookAction(a.slice(5), btn);
       else if (a.startsWith('panel:')) openPanel(a.slice(6));
+      else if (a.startsWith('buyUpg:')) { buyUpgrade(a.slice(7)); renderPanel(); }
+      else if (a.startsWith('buyStock:')) { buyStock(+a.slice(9)); renderPanel(); }
+      else if (a.startsWith('sellItem:')) { sellItem(a.slice(9)); renderPanel(); }
       else if (a.startsWith('setSfx:')) { S.settings.sfx = +a.slice(7); setVolumes(); renderPanel(); }
       else if (a.startsWith('setMus:')) { S.settings.music = +a.slice(7); setVolumes(); renderPanel(); }
       else if (a.startsWith('setQual:')) { S.settings.quality = a.slice(8); renderPanel(); }
@@ -107,6 +117,8 @@ export function handleAction(a, btn) {
       break;
   }
 }
+
+// ---------------- 商店面板由 inv.js 提供交易逻辑 ----------------
 
 function cookAction(pair, btn) {
   const [bkey, recipeId] = pair.split('|');
@@ -180,9 +192,11 @@ export function updateHUD() {
   $('#barHp').style.width = p.hp + '%';
   $('#barHunger').style.width = p.hunger + '%';
   $('#barThirst').style.width = p.thirst + '%';
+  $('#barXp').style.width = Math.min(100, S.xp / xpNeed(S.level) * 100) + '%';
   $('#txtHp').textContent = Math.ceil(p.hp);
   $('#txtHunger').textContent = Math.ceil(p.hunger);
   $('#txtThirst').textContent = Math.ceil(p.thirst);
+  $('#txtXp').textContent = `Lv.${S.level}`;
   $('#txtDay').textContent = `📅 第${S.time.day}天`;
   $('#txtClock').textContent = fmtTime(S.time.frac);
   $('#txtWeather').textContent = WEATHER_NAMES[S.weather.type] + (S.sailing.raised ? ' ⛵' : S.anchor ? ' ⚓' : '');
@@ -235,6 +249,23 @@ function drawMinimap() {
   ctx.fillStyle = 'rgba(60,90,110,0.7)';
   for (const f of S.entities.floaters) {
     ctx.fillRect(W / 2 + f.x * scale - 1, H / 2 + f.y * scale - 1, 2.4, 2.4);
+  }
+  // 漩涡/沉船/商筏标记
+  for (const v of S.entities.vortices) {
+    ctx.fillStyle = '#7A4AB8';
+    ctx.beginPath(); ctx.arc(W / 2 + v.x * scale, H / 2 + v.y * scale, 4, 0, 6.29); ctx.fill();
+  }
+  for (const w of S.entities.wrecks) {
+    if (w.done) continue;
+    ctx.fillStyle = '#5A4430';
+    ctx.fillRect(W / 2 + w.x * scale - 2, H / 2 + w.y * scale - 2, 4, 4);
+  }
+  const mc = S.entities.merchant;
+  if (mc) {
+    ctx.fillStyle = '#E8B84A';
+    ctx.beginPath(); ctx.arc(W / 2 + mc.x * scale, H / 2 + mc.y * scale, 4.5, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#4A3A10'; ctx.font = 'bold 7px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('商', W / 2 + mc.x * scale, H / 2 + mc.y * scale + 2.5);
   }
   // 木筏
   ctx.fillStyle = '#C0554A';
@@ -435,6 +466,78 @@ function renderPanel() {
         <button class="primary dis" data-a="resetSave">重开</button></div>
     </div>`;
   }
+  else if (which === 'upg') {
+    html += `<p class="hint">当前等级 <b>Lv.${S.level}</b> · 升级点 <b>${S.skillPts}</b> · 经验 ${S.xp}/${xpNeed(S.level)}<br>收集/钓鱼/烹饪/战斗/探岛都会涨经验</p><div class="rows">`;
+    for (const u of UPG) {
+      const cur = lv(u.id);
+      const maxed = cur >= u.max;
+      const pips = Array.from({ length: u.max }, (_, i) => i < cur ? '●' : '○').join('');
+      html += `<div class="row ${maxed ? 'done' : ''}">
+        <span class="em big">${u.emoji}</span>
+        <div class="grow"><b>${u.name} ${pips}</b><small>${u.desc}</small></div>
+        <button class="primary ${S.skillPts > 0 && !maxed ? '' : 'dis'}" data-a="buyUpg:${u.id}" ${S.skillPts > 0 && !maxed ? '' : 'disabled'}>${maxed ? '已满' : '升级'}</button>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  else if (which === 'shop') {
+    const m = S.entities.merchant;
+    if (!m) {
+      html += `<p class="hint">商筏已经远去了…等它下次到港吧</p>`;
+    } else {
+      html += `<p class="hint">🪙 古币余额：<b>${countItem('coin')}</b> · 商筏停留 ${Math.ceil(m.life)} 秒<br>古币来源：漩涡宝藏、巨鲨战利品、沉船搜刮</p><div class="rows">`;
+      m.stock.forEach((st, i) => {
+        const can = countItem('coin') >= st.coin;
+        html += `<div class="row">
+          <span class="em big">${ITEMS[st.id].emoji}</span>
+          <div class="grow"><b>${ITEMS[st.id].name}</b><small>${ITEMS[st.id].desc || ''}</small></div>
+          <span class="cost ${can ? 'ok' : 'lack'}">🪙${st.coin}</span>
+          <button class="primary ${can ? '' : 'dis'}" data-a="buyStock:${i}" ${can ? '' : 'disabled'}>买</button>
+        </div>`;
+      });
+      html += `</div><h3>💰 出售珍宝</h3><div class="rows">`;
+      for (const [id, price] of Object.entries(SELL_PRICES)) {
+        const have = countItem(id);
+        html += `<div class="row ${have ? '' : 'locked'}">
+          <span class="em big">${ITEMS[id].emoji}</span>
+          <div class="grow"><b>${ITEMS[id].name}</b><small>持有 ×${have}</small></div>
+          <span class="cost">🪙+${price}</span>
+          <button class="primary ${have ? '' : 'dis'}" data-a="sellItem:${id}" ${have ? '' : 'disabled'}>卖</button>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+  }
+  else if (which === 'stats') {
+    const st = S.stats;
+    const rows = [
+      ['⭐', '等级', `Lv.${S.level}（${S.xp}/${xpNeed(S.level)} 经验）`],
+      ['📅', '存活天数', st.days],
+      ['⏱️', '游戏时长', Math.floor(st.playTime / 60) + ' 分钟'],
+      ['📦', '收集物品', st.collected],
+      ['🐟', '钓鱼', st.fish],
+      ['🍢', '烹饪', st.cooked],
+      ['💧', '喝水', st.drank],
+      ['🦈', '击退鲨鱼', st.sharkFlee],
+      ['⚔️', '击杀鲨鱼', st.sharkKill],
+      ['🐙', '猎杀巨鲨', st.bossKill],
+      ['🏝️', '造访岛屿', st.islands],
+      ['💰', '开启宝箱', st.chests],
+      ['🌾', '收获作物', st.harvest],
+      ['🤿', '潜水采集', st.diveTake],
+      ['🛒', '交易次数', st.trades],
+      ['🌀', '漩涡宝藏', st.vortexLoot],
+      ['🚢', '搜刮沉船', st.wrecks],
+      ['🐬', '海豚同游', Math.floor(st.dolphinTime) + ' 秒'],
+      ['⛵', '累计航行', Math.floor(st.sailed) + ' 米'],
+      ['💀', '倒下次数', st.deaths],
+    ];
+    html += `<div class="rows">`;
+    for (const [em, k, v] of rows) {
+      html += `<div class="row"><span class="em big">${em}</span><div class="grow"><b>${k}</b></div><b style="color:#5A4A2A">${v}</b></div>`;
+    }
+    html += `</div>`;
+  }
   else if (which === 'help') {
     html += `<div class="helpText">
       <b>🎯 目标：</b>在海上活下去，扩建木筏，最终修复无线电找到灯塔岛获救。<br><br>
@@ -465,7 +568,7 @@ function renderPanel() {
   if (which === 'map') drawBigMap();
 }
 
-const PANEL_TITLES = { inv: '🎒 背包', craft: '🛠️ 合成', build: '🏗️ 建造', quests: '📜 主线任务', achv: '🏆 成就', map: '🗺️ 海图', settings: '⚙️ 设置', help: '❓ 帮助', station: '🏭 工作台' };
+const PANEL_TITLES = { inv: '🎒 背包', craft: '🛠️ 合成', build: '🏗️ 建造', quests: '📜 主线任务', achv: '🏆 成就', map: '🗺️ 海图', settings: '⚙️ 设置', help: '❓ 帮助', station: '🏭 工作台', upg: '⭐ 船长成长', shop: '🛒 商筏集市', stats: '📊 航海统计' };
 
 function drawBigMap() {
   const cv = $('#bigmap');

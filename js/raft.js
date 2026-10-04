@@ -2,6 +2,7 @@
 import { S, key, rand, dist, clamp, toast } from './state.js';
 import { TILE, BUILDINGS, STATION_RECIPES, CFG, ITEMS } from './data.js';
 import { hasAll, takeAll, countItem, addItem, grantLoot } from './inv.js';
+import { grantXP } from './upgrades.js';
 import { sfx } from './audio.js';
 
 export function initRaft() {
@@ -126,6 +127,7 @@ export function updateBuildings(dt) {
       grantLoot(c.out, '出锅');
       S.stats.cooked++;
       if (c.out.ingot) S.stats.ingots += c.out.ingot;
+      grantXP(5);
       sfx.levelup();
     }
   }
@@ -181,6 +183,7 @@ export function farmInteract(t) {
     if (f.crop === 'berry') { addItem('berry', 3, true); toast('收获 浆果 ×3', '🍓'); if (Math.random() < 0.5) addItem('seed_berry', 1, true); }
     else { addItem('potato', 2, true); toast('收获 土豆 ×2', '🥔'); if (Math.random() < 0.5) addItem('seed_potato', 1, true); }
     S.stats.harvest += 3;
+    grantXP(6);
     f.crop = null; f.done = false; f.t = 0;
     sfx.pickup();
   } else {

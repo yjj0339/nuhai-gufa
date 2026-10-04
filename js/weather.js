@@ -4,13 +4,14 @@ import { DAY_LEN, CFG } from './data.js';
 import { sfx } from './audio.js';
 
 const WEATHERS = [
-  { type: 'sunny', w: 38, dur: [90, 200] },
-  { type: 'cloudy', w: 26, dur: [60, 140] },
-  { type: 'windy', w: 16, dur: [50, 110] },
-  { type: 'rain', w: 13, dur: [50, 110] },
+  { type: 'sunny', w: 34, dur: [90, 200] },
+  { type: 'cloudy', w: 24, dur: [60, 140] },
+  { type: 'windy', w: 14, dur: [50, 110] },
+  { type: 'rain', w: 12, dur: [50, 110] },
   { type: 'storm', w: 7, dur: [35, 70] },
+  { type: 'foggy', w: 9, dur: [40, 90] },
 ];
-export const WEATHER_NAMES = { sunny: '☀️ 晴朗', cloudy: '⛅ 多云', windy: '🌬️ 大风', rain: '🌧️ 下雨', storm: '⛈️ 暴风雨' };
+export const WEATHER_NAMES = { sunny: '☀️ 晴朗', cloudy: '⛅ 多云', windy: '🌬️ 大风', rain: '🌧️ 下雨', storm: '⛈️ 暴风雨', foggy: '🌫️ 薄雾' };
 
 export function initWeather() {
   S.weather = { type: 'sunny', timer: rand(80, 140), intensity: 0, flash: 0, rainbow: 0, drops: [] };
@@ -37,7 +38,7 @@ function nextWeather() {
   if (pick.type === 'storm' || pick.type === 'rain') {
     S.wind.strength = rand(0.7, 1);
     if (pick.type === 'storm') { S.wind.dir += rand(-1.2, 1.2); }
-  } else S.wind.strength = pick.type === 'windy' ? rand(0.85, 1) : rand(0.35, 0.7);
+  } else S.wind.strength = pick.type === 'windy' ? rand(0.85, 1) : pick.type === 'foggy' ? rand(0.15, 0.35) : rand(0.35, 0.7);
   if (prev !== pick.type) {
     toast(`天气变化：${WEATHER_NAMES[pick.type]}`, pick.type === 'storm' ? '⛈️' : '🌤️');
     if (pick.type === 'rain' || pick.type === 'storm') sfx.rain();
@@ -133,6 +134,28 @@ export function drawWeatherOverlay(ctx, view, t) {
       ctx.strokeStyle = c; ctx.globalAlpha = a; ctx.lineWidth = 7;
       ctx.beginPath(); ctx.arc(0, 0, 240 - i * 8, Math.PI, 0); ctx.stroke();
     });
+    ctx.restore();
+  }
+  // 薄雾
+  if (S.weather.type === 'foggy') {
+    const fg = ctx.createRadialGradient(w / 2, h / 2, h * 0.18, w / 2, h / 2, h * 0.75);
+    const fa = 0.5 + 0.06 * Math.sin(t * 0.7);
+    fg.addColorStop(0, 'rgba(235,242,246,0.12)');
+    fg.addColorStop(1, `rgba(226,236,242,${fa})`);
+    ctx.fillStyle = fg;
+    ctx.fillRect(0, 0, w, h);
+    // 飘雾带
+    ctx.save();
+    for (let i = 0; i < 4; i++) {
+      const fy = (i * 0.23 + 0.12) * h + Math.sin(t * 0.4 + i * 2) * 24;
+      const fgx = ((t * (8 + i * 5)) % (w + 700)) - 350;
+      const g2 = ctx.createLinearGradient(fgx - 320, 0, fgx + 320, 0);
+      g2.addColorStop(0, 'rgba(238,244,248,0)');
+      g2.addColorStop(0.5, 'rgba(238,244,248,0.34)');
+      g2.addColorStop(1, 'rgba(238,244,248,0)');
+      ctx.fillStyle = g2;
+      ctx.fillRect(fgx - 320, fy - 34, 640, 68);
+    }
     ctx.restore();
   }
   // 夜幕

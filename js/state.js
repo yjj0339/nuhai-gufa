@@ -20,17 +20,22 @@ export const S = {
   raft: { tiles: new Map(), nextId: 1 },   // "c,r" -> {c,r,hp,armor,net,building:{...}}
   inv: { slots: new Array(30).fill(null), sel: 0 },
   storage: new Array(24).fill(null),       // 木箱共享仓
-  entities: { sharks: [], gulls: [], floaters: [], fish: [], parts: [], bubbles: [], birds: [] },
+  entities: { sharks: [], gulls: [], floaters: [], fish: [], parts: [], bubbles: [], birds: [], vortices: [], wrecks: [], merchant: null, dolphin: null },
   hook: null,              // {x,y,tx,ty,phase:'fly'|'reel',target}
   islands: [],
   fishing: null,           // 钓鱼小游戏状态
   cooking: {},             // buildingKey -> {recipeId, t, time}
   farmPlots: {},           // buildingKey -> {crop, t, time, watered}
+  xp: 0, level: 1, skillPts: 0,
+  upgrades: {},
+  merchantTimer: 160, wreckTimer: 200, vortexTimer: 240, dolphinTimer: 140,
+  lastBossDay: 0,
   stats: {
     days: 1, collected: 0, fish: 0, cooked: 0, drank: 0, ingots: 0,
     sharkFlee: 0, sharkKill: 0, harvest: 0, islands: 0, chests: 0,
     sailed: 0, radioFixed: 0, rescued: 0, rainTime: 0, gullShoo: 0,
     diveTake: 0, tiles: 0, lantern: 0, deaths: 0, playTime: 0,
+    bossKill: 0, trades: 0, dolphinTime: 0, vortexLoot: 0, wrecks: 0, bought: 0,
   },
   quests: { idx: 0, done: [] },
   achievements: new Set(),

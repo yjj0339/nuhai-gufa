@@ -1,10 +1,11 @@
 // ============ 玩家：移动 / 属性 / 动作 / 潜水 ============
 import { S, rand, randi, dist, clamp, toast, bus } from './state.js';
 import { TILE, CFG, ITEMS, ISLAND_TYPES, CHEST_LOOT } from './data.js';
+import { eff, grantXP } from './upgrades.js';
 import { addItem, countItem, removeItem } from './inv.js';
 import { tileAt, isOnRaft, nearestInteractable, farmInteract, sleepBed, hasBuilding, findBuilding } from './raft.js';
 import { islandWalkable } from './world.js';
-import { tryTakeUnderNode, hitShark, sharkNearPlayer, hitGull, spawnSplash, spawnBubbles, spawnHitStar } from './entities.js';
+import { tryTakeUnderNode, hitShark, sharkNearPlayer, hitGull, spawnSplash, spawnBubbles, spawnHitStar, tryTakeWreckNode, dolphinNearPlayer } from './entities.js';
 import { startFishing, stopFishing } from './fishing.js';
 import { sfx } from './audio.js';
 
@@ -20,12 +21,12 @@ export function updatePlayer(dt) {
   const moving = mag > 0.1;
   p.moving = moving;
   if (moving) p.dir = Math.atan2(my, mx);
-  const spd = p.swimming ? CFG.swimSpeed : CFG.playerSpeed;
+  const spd = p.swimming ? eff.swimSpeed() : CFG.playerSpeed;
   const nx = p.x + mx * spd * dt, ny = p.y + my * spd * dt;
 
   if (p.swimming) {
     p.x = nx; p.y = ny;
-    p.oxygen -= dt;
+    p.oxygen -= dt * (dolphinNearPlayer() ? 0.55 : 1);
     spawnBubbles(p.x, p.y, dt > 0.5 ? 1 : (Math.random() < dt * 2 ? 1 : 0));
     if (p.oxygen <= 0) {
       p.oxygen = 0;
@@ -40,8 +41,8 @@ export function updatePlayer(dt) {
     // 登岛
     const isl = islandWalkable(p.x, p.y);
     if (isl) {
-      p.swimming = false; p.onIsland = isl; p.oxygen = CFG.oxygenMax;
-      if (!isl.visited) { isl.visited = true; S.stats.islands++; if (isl.type === 'lighthouse') S.stats.lighthouse = 1; toast(`登上了${ISLAND_TYPES[isl.type]?.name || '灯塔岛'}！`, '🏝️'); sfx.quest(); }
+      p.swimming = false; p.onIsland = isl; p.oxygen = eff.oxygenMax();
+      if (!isl.visited) { isl.visited = true; S.stats.islands++; if (isl.type === 'lighthouse') S.stats.lighthouse = 1; grantXP(15); toast(`登上了${ISLAND_TYPES[isl.type]?.name || '灯塔岛'}！`, '🏝️'); sfx.quest(); }
     }
   } else {
     // 在筏上或在岛上行走
@@ -71,7 +72,7 @@ export function updatePlayer(dt) {
   // ---- 属性消耗 ----
   const raining = S.weather.type === 'rain' || S.weather.type === 'storm';
   if (raining && p.swimming) S.stats.rainTime += dt;
-  p.hunger = clamp(p.hunger - CFG.hungerRate * dt * (p.swimming ? 1.4 : 1), 0, 100);
+  p.hunger = clamp(p.hunger - eff.hungerRate() * dt * (p.swimming ? 1.4 : 1), 0, 100);
   p.thirst = clamp(p.thirst - CFG.thirstRate * dt * (raining ? 0.85 : 1), 0, 100);
   if (p.sick > 0) p.sick -= dt;
   if (p.hunger <= 0 || p.thirst <= 0) {
@@ -99,7 +100,7 @@ function enterWater() {
   const p = S.player;
   if (p.swimming) return;
   p.swimming = true;
-  p.oxygen = CFG.oxygenMax;
+  p.oxygen = eff.oxygenMax();
   p._climbCd = 0.8;
   spawnSplash(p.x, p.y, 12);
   sfx.splash();
@@ -108,7 +109,7 @@ function enterWater() {
 function exitWater() {
   const p = S.player;
   p.swimming = false;
-  p.oxygen = CFG.oxygenMax;
+  p.oxygen = eff.oxygenMax();
   p.onIsland = null;
   sfx.splash();
   spawnSplash(p.x, p.y, 8);
@@ -134,7 +135,7 @@ export function toggleDive() {
   const onRaft = isOnRaft(p.x, p.y);
   if (!onRaft && !p.onIsland) return;
   p.swimming = true;
-  p.oxygen = CFG.oxygenMax;
+  p.oxygen = eff.oxygenMax();
   p._climbCd = 1.0;
   // 往面朝方向跳一小段
   p.x += Math.cos(p.dir) * 40; p.y += Math.sin(p.dir) * 40;
@@ -188,7 +189,7 @@ export function doAttack() {
   }
   // 长矛/手钩 → 攻击
   if (tool === 'spear' || tool === 'spear_metal' || tool === 'hook') {
-    const dmg = tool === 'spear_metal' ? 2 : 1;
+    const dmg = eff.spearDmg(tool === 'spear_metal' ? 2 : 1);
     const shark = sharkNearPlayer(tool === 'spear_metal' ? 85 : 64);
     if (shark) { hitShark(shark, dmg); spawnHitStar(shark.x, shark.y); return; }
     // 海鸥（在头顶低空）
@@ -249,7 +250,16 @@ export function updateIslandNodes(dt) {
 export function doUse() {
   const p = S.player;
   if (p.swimming) {
+    if (tryTakeWreckNode()) return;
     tryTakeUnderNode();
+    return;
+  }
+  // 商筏交易
+  const m = S.entities.merchant;
+  if (m && dist(p.x, p.y, m.x, m.y) < 85) {
+    S.ui.panel = 'shop';
+    bus.emit('openPanel', 'shop');
+    sfx.open();
     return;
   }
   // 岛屿宝箱
@@ -297,6 +307,7 @@ export function doUse() {
 function openChest(isl) {
   isl.chest.open = true;
   S.stats.chests++;
+  grantXP(20);
   sfx.chest();
   const got = {};
   for (const l of CHEST_LOOT) if (Math.random() < l.p) got[l.id] = (got[l.id] || 0) + randi(l.n[0], l.n[1]);

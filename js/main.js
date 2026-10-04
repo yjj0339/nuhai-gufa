@@ -4,13 +4,14 @@ import { TILE, CFG, BUILDINGS, ITEMS, SAVE_KEY } from './data.js';
 import { initAudio, resumeAudio, sfx, updateAmbient } from './audio.js';
 import { updateWorld, drawOcean, drawFloaters, drawIslands, nearestIsland } from './world.js';
 import { drawRaft, updateBuildings, drawGhost, demolish, tileAt, canPlace, place } from './raft.js';
-import { updateSharks, updateGulls, updateFish, updateHook, updateParticles, updateUnderNodes, drawUnder, drawOver } from './entities.js';
+import { updateSharks, updateGulls, updateFish, updateHook, updateParticles, updateUnderNodes, drawUnder, drawOver, updateMerchant, updateDolphin, updateVortices, updateWrecks, drawNewUnder, drawNewOver } from './entities.js';
 import { updatePlayer, drawPlayer, doHookAt, updateIslandNodes, damagePlayer, doUse, doAttack } from './player.js';
 import { updateFishing, drawFishing } from './fishing.js';
 import { initWeather, updateWeather, drawWeatherOverlay, nightFactor } from './weather.js';
 import { updateQuests } from './quests.js';
 import { newGame, loadGame, saveGame, hasSave } from './save.js';
 import { countItem, startStationCook } from './inv.js';
+import { grantXP, buyUpgrade, UPG, eff } from './upgrades.js';
 import { initUI, updateHUD, openPanel, closePanel, tickToasts, setupTouch, renderToasts } from './ui.js';
 
 const $ = s => document.querySelector(s);
@@ -147,7 +148,7 @@ function loop(nowMs) {
     // 航行
     let sailDX = 0, sailDY = 0;
     if (S.sailing.raised && !S.anchor) {
-      const spd = CFG.sailSpeed * (0.55 + 0.75 * S.wind.strength);
+      const spd = eff.sailSpeed() * (0.55 + 0.75 * S.wind.strength);
       sailDX = Math.cos(S.sailing.angle) * spd * dt;
       sailDY = Math.sin(S.sailing.angle) * spd * dt;
     }
@@ -163,6 +164,10 @@ function loop(nowMs) {
     updateUnderNodes(dt);
     updateIslandNodes(dt);
     updateParticles(dt);
+    updateMerchant(dt);
+    updateDolphin(dt);
+    updateVortices(dt);
+    updateWrecks(dt);
     updateAmbient(dt);
     questAcc += dt;
     if (questAcc > 1) { questAcc = 0; updateQuests(); }
@@ -206,6 +211,7 @@ function render(dt) {
 
   drawIslands(ctx, S.t);
   drawUnder(ctx, S.t);
+  drawNewUnder(ctx, S.t);
   drawRaft(ctx, S.t);
   drawFloaters(ctx, S.t);
   // 建造幽灵
@@ -226,6 +232,7 @@ function render(dt) {
   }
   drawPlayer(ctx, S.t);
   drawOver(ctx, S.t);
+  drawNewOver(ctx, S.t);
   ctx.restore();
 
   drawWeatherOverlay(ctx, view, S.t);
@@ -316,6 +323,63 @@ async function selfTest() {
     S.stats.rescued = 0;
     updateQuests();
     log('结局检测', S.mode !== 'ending');
+    // ---- v1.1 强化系统 ----
+    const { grantXP, buyUpgrade, lv, eff } = await import('./upgrades.js');
+    grantXP(500);
+    log('经验升级', S.level >= 3 && S.skillPts >= 1, `Lv.${S.level} pts=${S.skillPts}`);
+    log('购买升级', buyUpgrade('hook') && lv('hook') === 1 && eff.hookRange() > CFG.hookRange);
+    // 商筏
+    const { spawnMerchant } = await import('./entities.js');
+    spawnMerchant();
+    const m = S.entities.merchant;
+    S.inv.slots[9] = { id: 'coin', n: 50 };
+    log('商筏到港', !!m && m.stock.length === 5);
+    if (m) {
+      const { buyStock } = await import('./inv.js');
+      const st = m.stock[0];
+      log('商筏购买', buyStock(0) && countItem(st.id) >= 1 && S.stats.trades >= 1);
+      S.entities.merchant = null;
+    }
+    // 巨鲨 Boss
+    const { hitShark: hs2 } = await import('./entities.js');
+    const boss = { x: 100, y: 0, dir: 0, state: 'circle', circT: 99, radius: 100, phase: 0, hp: 2, boss: true, warnT: 0, lungeT: 0, fleeT: 0, fleeDir: 0, deadT: 0, animT: 0, target: null };
+    S.entities.sharks.push(boss);
+    hs2(boss, 5);
+    log('巨鲨击杀', S.stats.bossKill === 1 && countItem('coin') >= 6);
+    // 漩涡（放在远离木筏处，玩家游过去）
+    S.entities.vortices.push({ x: 300, y: 0, r: 90, life: 50, t: 0, looted: false });
+    S.player.swimming = true; S.player.x = 300; S.player.y = 0; S.player._climbCd = 99;
+    const coinBefore = countItem('coin');
+    await frame(3);
+    log('漩涡宝藏', S.stats.vortexLoot === 1 && countItem('coin') > coinBefore);
+    S.player.swimming = false;
+    S.entities.vortices = [];
+    // 沉船
+    const { updateWrecks, tryTakeWreckNode } = await import('./entities.js');
+    S.wreckTimer = 0;
+    updateWrecks(0.01);
+    const w = S.entities.wrecks[0];
+    log('沉船生成', !!w && w.nodes.length >= 3);
+    if (w) {
+      S.player.swimming = true;
+      S.player.x = w.nodes[0].x; S.player.y = w.nodes[0].y;
+      log('沉船搜刮', tryTakeWreckNode() && w.nodes[0].taken);
+      S.player.swimming = false;
+    }
+    // 海豚（第2天才出现）
+    const { updateDolphin } = await import('./entities.js');
+    S.time.day = 2;
+    S.dolphinTimer = 0;
+    S.player.swimming = true; S.player.x = 190; S.player.y = 150;
+    for (let i = 0; i < 30; i++) updateDolphin(0.1);
+    log('海豚护航', !!S.entities.dolphin && S.stats.dolphinTime > 0, `time=${S.stats.dolphinTime.toFixed(1)}s`);
+    S.player.swimming = false;
+    // 存档兼容：新字段
+    saveGame(true);
+    const lvBefore = S.level;
+    const okLoad = loadGame();
+    log('v1.1存档兼容', okLoad && S.level === lvBefore && S.upgrades !== undefined);
+
     T.pass = T.steps.every(s => s.ok) && ERRS.length === 0;
     T.errors = [...ERRS];
     document.title = (T.pass ? 'TEST-PASS' : 'TEST-FAIL') + ` ${T.steps.filter(s => !s.ok).map(s => s.name).join(',')}`;
@@ -330,7 +394,7 @@ async function selfTest() {
 // ---------------- 启动 ----------------
 function boot() {
   // 测试/调试句柄
-  Object.assign(window, { S, place, tileAt, countItem, dist, doUse, doAttack, doHookAt, damagePlayer, startStationCook, saveGame, loadGame });
+  Object.assign(window, { S, place, tileAt, countItem, dist, doUse, doAttack, doHookAt, damagePlayer, startStationCook, saveGame, loadGame, grantXP, buyUpgrade });
   initUI();
   setupTouch();
   buildMenu();

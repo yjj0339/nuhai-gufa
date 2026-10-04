@@ -128,6 +128,15 @@ export const FISH = [
   { id: 'fish_lantern',  w: 3,  diff: 1.9, name: '灯笼鱼', nightOnly: true },
 ];
 
+// ---------------- 商筏 ----------------
+export const SHOP_STOCK = [
+  { id: 'seed_berry', coin: 2 }, { id: 'seed_potato', coin: 2 }, { id: 'rope', coin: 2 },
+  { id: 'nail', coin: 2 }, { id: 'cloth', coin: 3 }, { id: 'glass', coin: 3 },
+  { id: 'brick', coin: 3 }, { id: 'bolt', coin: 4 }, { id: 'ingot', coin: 5 },
+  { id: 'radio_part', coin: 12 }, { id: 'map_frag', coin: 15, rare: true },
+];
+export const SELL_PRICES = { pearl: 10, shark_tooth: 5 };
+
 // ---------------- 主线任务 ----------------
 export const QUESTS = [
   { id: 'q1',  name: '拾荒新手',   desc: '用手钩收集 8 件漂流物',            check: s => s.stats.collected >= 8,   reward: { wood: 4, rope: 2 } },
@@ -165,6 +174,12 @@ export const ACHIEVEMENTS = [
   { id: 'a_gull',  name: '护菜卫士',     desc: '赶走一只偷菜海鸥',     check: s => s.stats.gullShoo >= 1 },
   { id: 'a_dive',  name: '深潜者',       desc: '潜水采集 20 次',       check: s => s.stats.diveTake >= 20 },
   { id: 'a_full',  name: '酒足饭饱',     desc: '饱食度与水分同时 ≥90', check: s => s.player.hunger >= 90 && s.player.thirst >= 90 },
+  { id: 'a_lv5',   name: '老练船长',     desc: '等级达到 5 级',        check: s => s.level >= 5 },
+  { id: 'a_trade', name: '商路通四海',   desc: '与商筏完成一次交易',   check: s => s.stats.trades >= 1 },
+  { id: 'a_boss',  name: '屠戮深渊',     desc: '猎杀一头巨鲨',         check: s => s.stats.bossKill >= 1 },
+  { id: 'a_dolph', name: '海豚之友',     desc: '与海豚同游累计 30 秒', check: s => s.stats.dolphinTime >= 30 },
+  { id: 'a_vortex',name: '漩涡淘金者',   desc: '从漩涡中心取得宝藏',   check: s => s.stats.vortexLoot >= 1 },
+  { id: 'a_wreck', name: '沉船猎手',     desc: '搜刮完一艘沉船',       check: s => s.stats.wrecks >= 1 },
   { id: 'a_end',   name: '灯塔之约',     desc: '完成主线：获救',       check: s => s.stats.rescued >= 1 },
 ];
 

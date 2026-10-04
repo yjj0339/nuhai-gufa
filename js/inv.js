@@ -1,6 +1,7 @@
 // ============ 背包 / 物品增删 ============
 import { S, bus, toast, randi } from './state.js';
-import { ITEMS, RECIPES, STATION_RECIPES, CHEST_LOOT } from './data.js';
+import { ITEMS, RECIPES, STATION_RECIPES, CHEST_LOOT, SELL_PRICES } from './data.js';
+import { grantXP } from './upgrades.js';
 import { sfx } from './audio.js';
 
 export function countItem(id) {
@@ -144,5 +145,35 @@ export function startStationCook(stationKey, recipeId, bkey) {
   takeAll(r.in);
   S.cooking[bkey] = { recipeId, station: stationKey, t: 0, time: r.time, out: r.out };
   sfx.open();
+  return true;
+}
+
+// ---------------- 商筏交易 ----------------
+export function buyStock(idx) {
+  const m = S.entities.merchant;
+  if (!m) { toast('商筏已经走了', '💨'); return false; }
+  const st = m.stock[idx];
+  if (!st) return false;
+  if (countItem('coin') < st.coin) { toast('古币不够！', '🪙'); sfx.error(); return false; }
+  removeItem('coin', st.coin);
+  addItem(st.id, 1, true);
+  S.stats.trades++;
+  S.stats.bought++;
+  grantXP(10);
+  toast(`买到 ${ITEMS[st.id].name}`, ITEMS[st.id].emoji);
+  sfx.craft();
+  bus.emit('inv');
+  return true;
+}
+export function sellItem(id) {
+  const price = SELL_PRICES[id];
+  if (!price || countItem(id) <= 0) return false;
+  removeItem(id, 1);
+  addItem('coin', price, true);
+  S.stats.trades++;
+  grantXP(5);
+  toast(`卖出 ${ITEMS[id].name}，获得古币 ×${price}`, '🪙');
+  sfx.craft();
+  bus.emit('inv');
   return true;
 }

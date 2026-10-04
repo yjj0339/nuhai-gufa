@@ -99,17 +99,22 @@ export function updateAmbient(dt) {
     musicTimer -= dt;
     if (musicTimer <= 0) { musicTimer = 0.8; sfx.rain(); }
   }
-  // 悠闲五声音阶 BGM
+  // 悠闲 BGM（随天气/昼夜换调式）
   S._bgmT = (S._bgmT || 0) - dt;
   if (S._bgmT <= 0) {
     S._bgmT = 1.9 + Math.random() * 1.4;
-    const scale = [261.6, 293.7, 329.6, 392, 440, 523.3, 587.3];
+    const night = S.time.frac > 0.75 || S.time.frac < 0.25;
+    let scale;
+    if (S.weather.type === 'storm') scale = [174.6, 196, 233.1, 261.6, 311.1];
+    else if (S.weather.type === 'rain') scale = [196, 220, 246.9, 293.7, 329.6];
+    else if (night) scale = [261.6, 311.1, 349.2, 392, 466.2];
+    else scale = [261.6, 293.7, 329.6, 392, 440, 523.3, 587.3];
     const n = scale[Math.floor(Math.random() * scale.length)];
     const t0 = AC.currentTime;
     const o = AC.createOscillator(), g = AC.createGain();
     o.type = 'triangle'; o.frequency.value = n * (Math.random() < 0.3 ? 0.5 : 1);
     g.gain.setValueAtTime(0.001, t0);
-    g.gain.linearRampToValueAtTime(0.09, t0 + 0.3);
+    g.gain.linearRampToValueAtTime(S.weather.type === 'storm' ? 0.07 : 0.09, t0 + 0.3);
     g.gain.exponentialRampToValueAtTime(0.001, t0 + 2.4);
     o.connect(g); g.connect(musicGain);
     o.start(t0); o.stop(t0 + 2.5);

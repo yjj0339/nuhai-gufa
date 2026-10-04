@@ -2,6 +2,7 @@
 import { S, toast } from './state.js';
 import { QUESTS, ACHIEVEMENTS } from './data.js';
 import { grantLoot } from './inv.js';
+import { grantXP } from './upgrades.js';
 import { sfx } from './audio.js';
 
 export function currentQuest() {
@@ -14,6 +15,7 @@ export function updateQuests() {
   if (q && q.check(S)) {
     S.quests.done.push(q.id);
     S.quests.idx++;
+    grantXP(15);
     sfx.quest();
     toast(`主线任务完成：${q.name}`, '📜');
     if (q.reward && Object.keys(q.reward).length) grantLoot(q.reward, '任务奖励');
