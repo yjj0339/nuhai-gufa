@@ -1,0 +1,234 @@
+/* ============ 怒海孤筏 · 明亮浅色风格 ============ */
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body {
+  font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #8FE3D9;
+  touch-action: none;
+  user-select: none; -webkit-user-select: none;
+}
+#game { position: fixed; inset: 0; display: block; }
+#ui { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+#ui > * { pointer-events: auto; }
+
+/* 菜单期间隐藏 HUD */
+body.inMenu #ui > * { display: none !important; }
+
+.glass {
+  background: rgba(253, 250, 242, 0.93);
+  border: 1.5px solid rgba(216, 203, 170, 0.9);
+  border-radius: 14px;
+  box-shadow: 0 4px 18px rgba(60, 90, 100, 0.18);
+  color: #4A4030;
+}
+
+/* ---------- HUD 左上：状态 ---------- */
+#statPanel {
+  position: fixed; top: 12px; left: 12px;
+  padding: 10px 12px; width: 218px;
+  font-size: 12px;
+}
+.barRow { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+.barRow:last-of-type { margin-bottom: 0; }
+.barRow .ico { font-size: 13px; }
+.barRow .bar { flex: 1; height: 10px; background: rgba(120, 110, 90, 0.18); border-radius: 6px; overflow: hidden; }
+.barRow .bar i { display: block; height: 100%; border-radius: 6px; transition: width 0.3s; }
+.barRow b { width: 30px; text-align: right; font-size: 11px; color: #6A5A3A; }
+#envRow { display: flex; gap: 8px; margin-top: 7px; padding-top: 7px; border-top: 1px dashed rgba(160, 140, 100, 0.4); font-size: 11.5px; color: #6A5A3A; flex-wrap: wrap; }
+
+/* ---------- 右上：按钮 + 小地图 ---------- */
+#topRight { position: fixed; top: 12px; right: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+#menuBtns { display: flex; gap: 3px; padding: 5px; flex-wrap: wrap; justify-content: flex-end; max-width: 300px; }
+#menuBtns button {
+  width: 38px; height: 38px; font-size: 18px;
+  border: none; background: transparent; border-radius: 9px; cursor: pointer;
+  transition: background 0.15s;
+}
+#menuBtns button:hover { background: rgba(220, 200, 150, 0.5); }
+#minimap { border-radius: 12px; }
+
+/* ---------- 任务追踪 ---------- */
+#questTracker {
+  position: fixed; top: 162px; left: 12px;
+  padding: 7px 11px; max-width: 230px; font-size: 11.5px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+#questTracker b { color: #7A5A2A; font-size: 12px; }
+#questTracker span { color: #6A6A5A; }
+
+/* ---------- 热键栏 ---------- */
+#hotbar {
+  position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 6px; padding: 6px;
+}
+.hslot {
+  width: 46px; height: 46px; font-size: 22px;
+  border: 2px solid rgba(180, 160, 120, 0.6); border-radius: 10px;
+  background: rgba(255, 252, 244, 0.9); cursor: pointer; position: relative;
+  transition: transform 0.12s, border-color 0.12s;
+}
+.hslot:hover { transform: translateY(-3px); }
+.hslot.sel { border-color: #E88A3A; background: #FFF3DC; box-shadow: 0 0 0 2px rgba(232, 138, 58, 0.35); }
+.hslot.dim { opacity: 0.35; }
+.hslot.food b { position: absolute; right: 2px; bottom: 1px; font-size: 10px; color: #6A5A3A; background: rgba(255,255,255,0.8); border-radius: 5px; padding: 0 3px; }
+
+/* ---------- 靠岛提示 / 建造条 ---------- */
+#dockHint {
+  position: fixed; top: 18%; left: 50%; transform: translateX(-50%);
+  padding: 9px 16px; font-size: 14px; font-weight: bold; color: #2A7A5A;
+  animation: pulse 1.2s infinite;
+}
+#buildBar {
+  position: fixed; bottom: 72px; left: 50%; transform: translateX(-50%);
+  padding: 8px 14px; display: flex; gap: 10px; align-items: center; font-size: 13px;
+}
+#buildBar button {
+  border: 1.5px solid #C8B890; background: #FFF8EA; border-radius: 8px;
+  padding: 4px 10px; cursor: pointer; font-size: 12px;
+}
+@keyframes pulse { 50% { transform: translateX(-50%) scale(1.06); } }
+
+/* ---------- 手机动作按钮 / 摇杆 ---------- */
+#actionBtns { position: fixed; right: 14px; bottom: 76px; display: none; flex-direction: column; gap: 10px; }
+#actionBtns button {
+  width: 60px; height: 60px; border-radius: 50%;
+  border: 2px solid rgba(180, 160, 120, 0.7);
+  background: rgba(255, 252, 244, 0.88);
+  font-size: 22px; line-height: 1; cursor: pointer;
+  box-shadow: 0 3px 10px rgba(50, 80, 90, 0.25);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+#actionBtns button small { font-size: 9px; color: #6A5A3A; margin-top: 1px; }
+#actionBtns button:active { background: #FFE8C8; transform: scale(0.94); }
+#joystick {
+  position: fixed; left: 20px; bottom: 70px;
+  width: 124px; height: 124px; border-radius: 50%;
+  background: rgba(255, 252, 244, 0.35);
+  border: 2px solid rgba(255, 252, 244, 0.55);
+  display: none; touch-action: none;
+}
+#joyKnob {
+  position: absolute; left: 50%; top: 50%;
+  width: 54px; height: 54px; border-radius: 50%;
+  background: rgba(255, 252, 244, 0.92);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 3px 10px rgba(50, 80, 90, 0.3);
+  margin-left: -27px; margin-top: -27px;
+  pointer-events: none;
+}
+
+/* ---------- Toast ---------- */
+#toasts {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 6px; align-items: center;
+  pointer-events: none; z-index: 30; max-width: 82vw;
+}
+.toast {
+  background: rgba(255, 253, 246, 0.95);
+  border: 1.5px solid #E0D0A8; border-radius: 20px;
+  padding: 6px 15px; font-size: 13px; color: #5A4A30;
+  box-shadow: 0 3px 12px rgba(60, 90, 100, 0.2);
+  display: flex; gap: 6px; align-items: center;
+  animation: toastIn 0.25s ease-out;
+}
+@keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } }
+
+/* ---------- 面板 ---------- */
+#panelWrap {
+  position: fixed; inset: 0; z-index: 20;
+  background: rgba(40, 70, 80, 0.35);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+#panel {
+  width: min(560px, 94vw); max-height: 84vh; overflow-y: auto;
+  padding: 16px 18px; pointer-events: auto;
+}
+.panelHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.panelHead b { font-size: 17px; color: #5A4A2A; }
+.panelHead .x {
+  border: none; background: rgba(200, 170, 120, 0.3); width: 30px; height: 30px;
+  border-radius: 8px; cursor: pointer; font-size: 14px;
+}
+.grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 8px 0; }
+.grid.small { grid-template-columns: repeat(8, 1fr); }
+.slot {
+  aspect-ratio: 1; border: 1.5px solid rgba(190, 170, 130, 0.55); border-radius: 9px;
+  background: rgba(255, 252, 244, 0.85);
+  display: flex; align-items: center; justify-content: center;
+  position: relative; cursor: pointer; min-height: 40px;
+}
+.slot:hover { border-color: #E88A3A; }
+.slot.empty { cursor: default; background: rgba(230, 220, 195, 0.35); }
+.slot .em { font-size: 21px; }
+.slot b { position: absolute; right: 3px; bottom: 2px; font-size: 10px; color: #6A5A3A; background: rgba(255,255,255,0.85); border-radius: 4px; padding: 0 3px; }
+.rows { display: flex; flex-direction: column; gap: 8px; }
+.row {
+  display: flex; align-items: center; gap: 10px;
+  border: 1.5px solid rgba(200, 180, 140, 0.5); border-radius: 11px;
+  padding: 8px 10px; background: rgba(255, 253, 246, 0.8);
+}
+.row.active { border-color: #E8A83A; background: #FFF6E2; }
+.row.done { opacity: 0.72; border-color: #A8C8A0; }
+.row.locked { opacity: 0.55; }
+.row .em.big { font-size: 26px; }
+.row .grow { flex: 1; min-width: 0; }
+.row .grow b { font-size: 13.5px; display: block; color: #5A4A2A; }
+.row .grow small { font-size: 11px; color: #8A7A5A; display: block; margin: 1px 0 3px; }
+.costs { display: flex; gap: 5px; flex-wrap: wrap; }
+.cost { font-size: 11px; background: rgba(230, 220, 190, 0.6); border-radius: 6px; padding: 1px 6px; color: #6A5A3A; }
+.cost.ok { background: #D8F0D0; color: #3A7A3A; }
+.cost.lack { background: #F8D8D0; color: #B04A3A; }
+button.primary {
+  border: none; border-radius: 9px; background: #E8944A; color: #fff;
+  padding: 7px 14px; font-size: 13px; cursor: pointer; font-weight: bold;
+  box-shadow: 0 2px 6px rgba(180, 110, 40, 0.35);
+}
+button.primary:hover { background: #E88A3A; }
+button.primary.dis { background: #C8C0B0; box-shadow: none; cursor: not-allowed; }
+button.ghost { background: #F2EBD8; color: #6A5A3A; box-shadow: none; border: 1.5px solid #D8C8A0; }
+.hint { font-size: 11.5px; color: #9A8A6A; margin: 6px 0; line-height: 1.5; }
+h3 { font-size: 13px; color: #7A6A4A; margin: 10px 0 4px; }
+.bar.thin { height: 7px; background: rgba(120,110,90,0.2); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+.bar.thin i { display: block; height: 100%; background: #7AC86A; }
+input[type=range] { width: 120px; accent-color: #E8944A; }
+.helpText { font-size: 12.5px; line-height: 1.75; color: #5A4A30; }
+.helpText.left { text-align: left; }
+.helpText b { color: #7A5A2A; }
+
+/* ---------- 菜单 / 结算 ---------- */
+#menu, #endScreen {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 30%, rgba(255,255,240,0.25), rgba(30,80,100,0.35));
+  padding: 18px;
+}
+.menuCard {
+  padding: 30px 34px; text-align: center;
+  width: min(430px, 92vw);
+  animation: cardIn 0.4s ease-out;
+}
+@keyframes cardIn { from { opacity: 0; transform: translateY(24px) scale(0.97); } }
+.menuCard h1 { font-size: 34px; color: #3A7A9A; letter-spacing: 2px; margin-bottom: 4px; }
+.menuCard .sub { font-size: 13px; color: #9A8A6A; margin-bottom: 20px; }
+.menuCard .big { display: block; width: 100%; margin-bottom: 10px; padding: 12px; font-size: 16px; }
+.menuCard .fine { font-size: 10.5px; color: #A89A78; line-height: 1.7; margin-top: 12px; }
+.endStats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0 20px; }
+.endStats div { background: rgba(240, 230, 205, 0.6); border-radius: 10px; padding: 8px 4px; }
+.endStats b { font-size: 19px; color: #5A4A2A; display: block; }
+.endStats span { font-size: 10.5px; color: #9A8A6A; }
+
+/* ---------- 小屏适配 ---------- */
+@media (max-width: 720px) {
+  #statPanel { width: 178px; padding: 8px 9px; font-size: 11px; }
+  #menuBtns button { width: 33px; height: 33px; font-size: 15px; }
+  #minimap { width: 104px; height: 104px; }
+  #questTracker { top: 150px; max-width: 180px; font-size: 10.5px; }
+  .hslot { width: 40px; height: 40px; font-size: 18px; }
+  #hotbar { bottom: 12px; }
+  #actionBtns { bottom: 66px; right: 10px; }
+  #actionBtns button { width: 54px; height: 54px; font-size: 19px; }
+  #joystick { left: 12px; bottom: 56px; width: 110px; height: 110px; }
+  #panel { max-height: 78vh; }
+  .menuCard h1 { font-size: 27px; }
+}

@@ -1,0 +1,36 @@
+// ============ 任务链 & 成就 ============
+import { S, toast } from './state.js';
+import { QUESTS, ACHIEVEMENTS } from './data.js';
+import { grantLoot } from './inv.js';
+import { sfx } from './audio.js';
+
+export function currentQuest() {
+  if (S.quests.idx >= QUESTS.length) return null;
+  return QUESTS[S.quests.idx];
+}
+
+export function updateQuests() {
+  const q = currentQuest();
+  if (q && q.check(S)) {
+    S.quests.done.push(q.id);
+    S.quests.idx++;
+    sfx.quest();
+    toast(`主线任务完成：${q.name}`, '📜');
+    if (q.reward && Object.keys(q.reward).length) grantLoot(q.reward, '任务奖励');
+    if (q.id === 'q12') {
+      S.stats.rescued = 1;
+      S.mode = 'ending';
+    }
+  }
+  // 成就
+  for (const a of ACHIEVEMENTS) {
+    if (S.achievements.has(a.id)) continue;
+    try {
+      if (a.check(S)) {
+        S.achievements.add(a.id);
+        sfx.achv();
+        toast(`🏆 成就解锁：${a.name}`, '🏆');
+      }
+    } catch (e) { /* 忽略单条成就错误 */ }
+  }
+}

@@ -1,0 +1,456 @@
+// ============ 木筏：网格建造 / 建筑行为 / 渲染 ============
+import { S, key, rand, dist, clamp, toast } from './state.js';
+import { TILE, BUILDINGS, STATION_RECIPES, CFG, ITEMS } from './data.js';
+import { hasAll, takeAll, countItem, addItem, grantLoot } from './inv.js';
+import { sfx } from './audio.js';
+
+export function initRaft() {
+  S.raft.tiles.clear();
+  S.raft.nextId = 1;
+  for (let c = -1; c <= 1; c++) for (let r = -1; r <= 1; r++) addTile(c, r);
+  S.cooking = {}; S.farmPlots = {};
+  S.stats.tiles = S.raft.tiles.size;
+}
+
+function addTile(c, r) {
+  S.raft.tiles.set(key(c, r), { c, r, hp: CFG.tileHp, armor: false, net: false, id: S.raft.nextId++ });
+  S.stats.tiles = S.raft.tiles.size;
+}
+
+export function tileAt(x, y) {
+  return S.raft.tiles.get(key(Math.floor(x / TILE), Math.floor(y / TILE)));
+}
+export function isOnRaft(x, y) { return !!tileAt(x, y); }
+
+export function isEdgeTile(t) {
+  return !S.raft.tiles.has(key(t.c - 1, t.r)) || !S.raft.tiles.has(key(t.c + 1, t.r)) ||
+         !S.raft.tiles.has(key(t.c, t.r - 1)) || !S.raft.tiles.has(key(t.c, t.r + 1));
+}
+export function edgeTiles() {
+  const out = [];
+  for (const t of S.raft.tiles.values()) if (isEdgeTile(t)) out.push(t);
+  return out;
+}
+
+// ---------------- 放置 / 拆除 ----------------
+export function canPlace(type, c, r) {
+  const def = BUILDINGS[type];
+  if (!def) return { ok: false, why: '未知建筑' };
+  const k = key(c, r);
+  const tile = S.raft.tiles.get(k);
+  if (def.upgrade) {
+    if (!tile) return { ok: false, why: '先铺地板' };
+    if (tile.armor) return { ok: false, why: '已是加固地板' };
+    if (tile.b) return { ok: false, why: '先拆掉上面的建筑' };
+    return { ok: true };
+  }
+  if (type === 'floor') {
+    if (tile) return { ok: false, why: '这里已有地板' };
+    const adj = S.raft.tiles.has(key(c - 1, r)) || S.raft.tiles.has(key(c + 1, r)) ||
+                S.raft.tiles.has(key(c, r - 1)) || S.raft.tiles.has(key(c, r + 1));
+    if (!adj) return { ok: false, why: '必须与木筏相连' };
+    if (Math.abs(c) > 14 || Math.abs(r) > 14) return { ok: false, why: '太远了' };
+    return { ok: true };
+  }
+  if (type === 'net') {
+    if (!tile) return { ok: false, why: '先铺地板' };
+    if (tile.net) return { ok: false, why: '已有防鲨网' };
+    if (!isEdgeTile(tile)) return { ok: false, why: '只能装在木筏边缘' };
+    return { ok: true };
+  }
+  if (!tile) return { ok: false, why: '必须建在地板上' };
+  if (tile.b) return { ok: false, why: '这块地板已有建筑' };
+  if ((type === 'sail' || type === 'anchor' || type === 'radio') && hasBuilding(type)) return { ok: false, why: '只能建一个' };
+  return { ok: true };
+}
+
+export function hasBuilding(type) {
+  for (const t of S.raft.tiles.values()) if (t.b && t.b.type === type) return true;
+  return false;
+}
+export function findBuilding(type) {
+  for (const t of S.raft.tiles.values()) if (t.b && t.b.type === type) return t;
+  return null;
+}
+
+export function place(type, c, r, free = false) {
+  const chk = canPlace(type, c, r);
+  if (!chk.ok) { if (!free) toast(chk.why, '⚠️'); return false; }
+  const cost = BUILDINGS[type].cost;
+  if (!free) {
+    if (!hasAll(cost)) { toast('材料不足', '⚠️'); sfx.error(); return false; }
+    takeAll(cost);
+  }
+  const def = BUILDINGS[type];
+  if (def.upgrade) { S.raft.tiles.get(key(c, r)).armor = true; }
+  else if (type === 'floor') { addTile(c, r); }
+  else if (type === 'net') { S.raft.tiles.get(key(c, r)).net = true; }
+  else { S.raft.tiles.get(key(c, r)).b = { type, c, r }; }
+  sfx.place();
+  return true;
+}
+
+export function demolish(c, r) {
+  const t = S.raft.tiles.get(key(c, r));
+  if (!t) return false;
+  if (t.b) {
+    const def = BUILDINGS[t.b.type];
+    delete S.cooking[key(c, r)]; delete S.farmPlots[key(c, r)];
+    t.b = null;
+    grantLoot(refundHalf(def.cost), '拆回');
+    sfx.place();
+    return true;
+  }
+  if (t.net) { t.net = false; grantLoot(refundHalf(BUILDINGS.net.cost), '拆回'); sfx.place(); return true; }
+  if (S.raft.tiles.size <= 4) { toast('至少要保留 4 块地板！', '⚠️'); sfx.error(); return false; }
+  if (t.armor) { t.armor = false; grantLoot({ ingot: 1 }, '拆回'); sfx.place(); return true; }
+  S.raft.tiles.delete(key(c, r));
+  S.stats.tiles = S.raft.tiles.size;
+  grantLoot({ wood: 1 }, '拆回');
+  sfx.place();
+  return true;
+}
+function refundHalf(cost) {
+  const out = {};
+  for (const [id, n] of Object.entries(cost)) if (Math.floor(n / 2) > 0) out[id] = Math.floor(n / 2);
+  return out;
+}
+
+// ---------------- 建筑行为 ----------------
+export function updateBuildings(dt) {
+  // 烹饪进度
+  for (const [bk, c] of Object.entries(S.cooking)) {
+    c.t += dt;
+    if (c.t >= c.time) {
+      delete S.cooking[bk];
+      grantLoot(c.out, '出锅');
+      S.stats.cooked++;
+      if (c.out.ingot) S.stats.ingots += c.out.ingot;
+      sfx.levelup();
+    }
+  }
+  // 农田生长
+  const raining = S.weather.type === 'rain' || S.weather.type === 'storm';
+  for (const [bk, f] of Object.entries(S.farmPlots)) {
+    if (!f.crop) continue;
+    if (f.done) continue;
+    const speed = raining ? 2 : f.watered ? 1.5 : 1;
+    f.t += dt * speed;
+    if (raining) f.watered = true;
+    if (f.t >= f.time) { f.done = true; toast('作物成熟了！', '🪴'); sfx.levelup(); }
+  }
+  // 雨水收集器
+  if (raining) {
+    for (const t of S.raft.tiles.values()) {
+      if (t.b && t.b.type === 'raincatcher') {
+        t.b.acc = (t.b.acc || 0) + dt;
+        if (t.b.acc >= 14) { t.b.acc = 0; addItem('water', 1, true); toast('雨水收集器 +1 纯净水', '☔'); }
+      }
+    }
+  }
+}
+
+// 交互：玩家 E 键使用最近的建筑
+export function nearestInteractable(px, py, range = TILE * 1.45) {
+  let best = null, bd = range;
+  for (const t of S.raft.tiles.values()) {
+    if (!t.b) continue;
+    const cx = (t.c + 0.5) * TILE, cy = (t.r + 0.5) * TILE;
+    const d = dist(px, py, cx, cy);
+    if (d < bd) { bd = d; best = t; }
+  }
+  return best;
+}
+
+// 农田种植/收获
+export function farmInteract(t) {
+  const bk = key(t.c, t.r);
+  let f = S.farmPlots[bk];
+  if (!f) { f = S.farmPlots[bk] = { crop: null, t: 0, time: 0, done: false, watered: false }; }
+  if (!f.crop) {
+    let seed = null;
+    if (countItem('seed_potato') > 0) seed = 'seed_potato';
+    if (countItem('seed_berry') > 0) seed = 'seed_berry';
+    if (!seed) { toast('没有种子，去岛上找找浆果丛吧', '🌱'); sfx.error(); return; }
+    removeSeed(seed);
+    f.crop = seed === 'seed_potato' ? 'potato' : 'berry';
+    f.time = f.crop === 'berry' ? 95 : 130;
+    f.t = 0; f.done = false; f.watered = false;
+    toast(`种下了${ITEMS[seed].name}`, ITEMS[seed].emoji);
+  } else if (f.done) {
+    if (f.crop === 'berry') { addItem('berry', 3, true); toast('收获 浆果 ×3', '🍓'); if (Math.random() < 0.5) addItem('seed_berry', 1, true); }
+    else { addItem('potato', 2, true); toast('收获 土豆 ×2', '🥔'); if (Math.random() < 0.5) addItem('seed_potato', 1, true); }
+    S.stats.harvest += 3;
+    f.crop = null; f.done = false; f.t = 0;
+    sfx.pickup();
+  } else {
+    toast(`还需 ${Math.ceil(f.time - f.t)} 秒成熟`, '⏳');
+  }
+}
+function removeSeed(id) { // 只从背包扣
+  for (let i = 0; i < S.inv.slots.length; i++) {
+    const s = S.inv.slots[i];
+    if (s && s.id === id) { s.n--; if (s.n <= 0) S.inv.slots[i] = null; return; }
+  }
+}
+
+// 睡觉
+export function sleepBed() {
+  const frac = S.time.frac;
+  if (frac < 0.24 || frac > 0.78) {
+    S.time.day++; S.time.frac = 0.26;
+    S.stats.days = Math.max(S.stats.days, S.time.day - 1);
+    toast('睡了个好觉，新的一天开始了', '🌅');
+    sfx.quest();
+    return true;
+  }
+  toast('现在还不困，天黑再睡吧', '☀️');
+  return false;
+}
+
+// ---------------- 渲染 ----------------
+export function drawRaft(ctx, t) {
+  // 阴影
+  ctx.fillStyle = 'rgba(20,70,90,0.18)';
+  for (const tl of S.raft.tiles.values()) {
+    ctx.fillRect(tl.c * TILE + 3, tl.r * TILE + 6, TILE - 2, TILE - 4);
+  }
+  for (const tl of S.raft.tiles.values()) {
+    const x = tl.c * TILE, y = tl.r * TILE;
+    // 泡沫
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    const fo = 2 + Math.sin(t * 2 + tl.id) * 1.5;
+    ctx.fillRect(x - fo, y - fo, TILE + fo * 2, TILE + fo * 2);
+    // 底板
+    ctx.fillStyle = tl.armor ? '#7A828C' : '#A9713D';
+    ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
+    // 木板条纹
+    const light = tl.armor ? '#8E97A3' : '#C08547';
+    const dark = tl.armor ? '#6A727C' : '#96622F';
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = i % 2 ? light : dark;
+      ctx.fillRect(x + 3, y + 3 + i * ((TILE - 6) / 3), TILE - 6, (TILE - 6) / 3 - 2);
+    }
+    // 钉子点
+    ctx.fillStyle = 'rgba(80,50,20,0.5)';
+    ctx.fillRect(x + 5, y + 5, 2, 2); ctx.fillRect(x + TILE - 7, y + TILE - 7, 2, 2);
+    // 受损裂纹
+    if (tl.hp < CFG.tileHp) {
+      ctx.strokeStyle = 'rgba(40,20,5,0.65)'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + 10, y + 8); ctx.lineTo(x + 20, y + 22); ctx.lineTo(x + 14, y + 34);
+      if (tl.hp < 2) { ctx.moveTo(x + 34, y + 10); ctx.lineTo(x + 26, y + 24); ctx.lineTo(x + 36, y + 38); }
+      ctx.stroke();
+    }
+    // 加固包边 / 防鲨网
+    if (tl.armor) { ctx.strokeStyle = '#5A6270'; ctx.lineWidth = 3; ctx.strokeRect(x + 2, y + 2, TILE - 4, TILE - 4); }
+    if (tl.net) {
+      ctx.strokeStyle = 'rgba(240,240,220,0.75)'; ctx.lineWidth = 1.4;
+      for (let i = 1; i < 5; i++) {
+        ctx.beginPath(); ctx.moveTo(x + i * TILE / 5, y + 2); ctx.lineTo(x + i * TILE / 5, y + TILE - 2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x + 2, y + i * TILE / 5); ctx.lineTo(x + TILE - 2, y + i * TILE / 5); ctx.stroke();
+      }
+    }
+  }
+  // 建筑与漂浮标识
+  for (const tl of S.raft.tiles.values()) {
+    if (tl.b) drawBuilding(ctx, tl, t);
+  }
+}
+
+function drawBuilding(ctx, tl, t) {
+  const b = tl.b;
+  const x = tl.c * TILE + TILE / 2, y = tl.r * TILE + TILE / 2;
+  const bk = key(tl.c, tl.r);
+  ctx.save();
+  ctx.translate(x, y);
+  // 影
+  ctx.fillStyle = 'rgba(30,50,60,0.2)';
+  ctx.beginPath(); ctx.ellipse(0, 14, 17, 6, 0, 0, 6.29); ctx.fill();
+  switch (b.type) {
+    case 'purifier': {
+      ctx.fillStyle = '#D8E6EC';
+      ctx.beginPath(); ctx.roundRect(-15, -18, 30, 32, 5); ctx.fill();
+      ctx.fillStyle = '#9FB8C4'; ctx.fillRect(-15, -2, 30, 5);
+      ctx.fillStyle = 'rgba(110,190,230,0.85)';
+      ctx.beginPath(); ctx.arc(0, -9, 7, 0, 6.29); ctx.fill();
+      ctx.fillStyle = '#7A828C'; ctx.fillRect(-4, 12, 8, 6);
+      if (S.cooking[bk]) drawProg(ctx, S.cooking[bk].t / S.cooking[bk].time, '💧');
+      break;
+    }
+    case 'grill': {
+      ctx.fillStyle = '#6A727C'; ctx.fillRect(-14, 4, 28, 4);
+      ctx.fillStyle = '#4A505A'; ctx.fillRect(-11, 8, 3, 9); ctx.fillRect(8, 8, 3, 9);
+      ctx.fillStyle = '#3E4550'; ctx.beginPath(); ctx.roundRect(-13, -12, 26, 16, 4); ctx.fill();
+      const fl = 0.6 + 0.4 * Math.sin(t * 7);
+      ctx.fillStyle = S.cooking[bk] ? `rgba(255,140,50,${fl})` : 'rgba(120,120,120,0.3)';
+      ctx.beginPath(); ctx.ellipse(0, 2, 9, 4, 0, 0, 6.29); ctx.fill();
+      if (S.cooking[bk]) drawProg(ctx, S.cooking[bk].t / S.cooking[bk].time, '🍢');
+      break;
+    }
+    case 'smelter': {
+      ctx.fillStyle = '#8A6B52';
+      ctx.beginPath(); ctx.roundRect(-16, -14, 32, 30, 4); ctx.fill();
+      ctx.fillStyle = '#6A5038';
+      ctx.beginPath(); ctx.roundRect(-16, -14, 32, 8, 4); ctx.fill();
+      ctx.fillStyle = '#2E2A26';
+      ctx.beginPath(); ctx.arc(0, 4, 8, 0, 6.29); ctx.fill();
+      if (S.cooking[bk]) {
+        const fl = 0.6 + 0.4 * Math.sin(t * 9);
+        ctx.fillStyle = `rgba(255,150,40,${fl})`;
+        ctx.beginPath(); ctx.arc(0, 4, 5 + fl * 2, 0, 6.29); ctx.fill();
+        drawProg(ctx, S.cooking[bk].t / S.cooking[bk].time, '🏭');
+      }
+      break;
+    }
+    case 'farm': {
+      ctx.fillStyle = '#8A5A2E';
+      ctx.beginPath(); ctx.roundRect(-17, -13, 34, 28, 4); ctx.fill();
+      ctx.fillStyle = '#5C4326'; ctx.fillRect(-14, -10, 28, 22);
+      const f = S.farmPlots[bk];
+      if (f && f.crop) {
+        const p = clamp(f.t / f.time, 0, 1);
+        const rows = f.crop === 'berry' ? 2 : 3;
+        for (let i = 0; i < rows; i++) {
+          const gx = -8 + i * 8, gy = -4 + (i % 2) * 8;
+          if (p < 0.33) { ctx.fillStyle = '#6CBF5E'; ctx.fillRect(gx - 1, gy, 2, 5); }
+          else if (p < 1) { ctx.fillStyle = '#4FA24C'; ctx.beginPath(); ctx.arc(gx, gy - 2, 3.5, 0, 6.29); ctx.fill(); }
+          else {
+            ctx.fillStyle = '#3E8E44'; ctx.beginPath(); ctx.arc(gx, gy - 2, 4.5, 0, 6.29); ctx.fill();
+            ctx.fillStyle = f.crop === 'berry' ? '#E84A6A' : '#E8C86A';
+            ctx.beginPath(); ctx.arc(gx - 2, gy - 4, 2.2, 0, 6.29); ctx.fill();
+            ctx.beginPath(); ctx.arc(gx + 2, gy - 1, 2.2, 0, 6.29); ctx.fill();
+          }
+        }
+        if (f.done) { ctx.font = '12px system-ui'; ctx.textAlign = 'center'; ctx.fillText('✨', 0, -14); }
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.font = '13px system-ui'; ctx.textAlign = 'center'; ctx.fillText('🌱', 0, 4);
+      }
+      break;
+    }
+    case 'bed': {
+      ctx.fillStyle = '#8A5A2E';
+      ctx.beginPath(); ctx.roundRect(-16, -10, 32, 22, 4); ctx.fill();
+      ctx.fillStyle = '#F0EAD8'; ctx.beginPath(); ctx.roundRect(-13, -7, 12, 16, 3); ctx.fill();
+      ctx.fillStyle = '#E8735A'; ctx.beginPath(); ctx.roundRect(0, -7, 13, 16, 3); ctx.fill();
+      break;
+    }
+    case 'chest': {
+      ctx.fillStyle = '#8A5A2E';
+      ctx.beginPath(); ctx.roundRect(-14, -10, 28, 20, 4); ctx.fill();
+      ctx.fillStyle = '#A9713D'; ctx.beginPath(); ctx.roundRect(-14, -10, 28, 9, 4); ctx.fill();
+      ctx.fillStyle = '#D8B25E'; ctx.fillRect(-2.5, -4, 5, 8);
+      break;
+    }
+    case 'sail': {
+      ctx.strokeStyle = '#7A5A36'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(0, 16); ctx.lineTo(0, -22); ctx.stroke();
+      const ang = S.sailing.angle;
+      ctx.save();
+      ctx.rotate(ang);
+      ctx.fillStyle = S.sailing.raised ? '#F2EBD8' : '#D8CDB4';
+      ctx.beginPath();
+      ctx.moveTo(2, -20);
+      ctx.quadraticCurveTo(16, -8, 12, 10);
+      ctx.quadraticCurveTo(6, 2, 2, -2);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#C8BC9C'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(2, -20); ctx.lineTo(12, 10); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = S.sailing.raised ? '#5AC86A' : '#C0554A';
+      ctx.beginPath(); ctx.arc(0, 18, 4, 0, 6.29); ctx.fill();
+      break;
+    }
+    case 'anchor': {
+      ctx.strokeStyle = '#5A6270'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(0, 8); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 12, 8, Math.PI * 1.15, Math.PI * 1.85, false); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-6, -14); ctx.lineTo(6, -14); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, -14, 3.5, 0, 6.29); ctx.stroke();
+      break;
+    }
+    case 'campfire': {
+      ctx.fillStyle = '#6A5038';
+      for (let i = 0; i < 3; i++) { ctx.save(); ctx.rotate(i * 2.09); ctx.fillRect(-9, -2, 18, 4); ctx.restore(); }
+      const fl = Math.sin(t * 8) * 0.2 + 1;
+      ctx.fillStyle = 'rgba(255,120,30,0.9)';
+      ctx.beginPath(); ctx.moveTo(-6, 0); ctx.quadraticCurveTo(-3, -12 * fl, 0, -15 * fl); ctx.quadraticCurveTo(3, -12 * fl, 6, 0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,210,80,0.9)';
+      ctx.beginPath(); ctx.moveTo(-3, 0); ctx.quadraticCurveTo(0, -7 * fl, 1, -9 * fl); ctx.quadraticCurveTo(3, -6 * fl, 3, 0); ctx.closePath(); ctx.fill();
+      break;
+    }
+    case 'raincatcher': {
+      ctx.strokeStyle = '#8A6B52'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(-8, 14); ctx.lineTo(0, -8); ctx.lineTo(8, 14); ctx.stroke();
+      ctx.fillStyle = 'rgba(120,200,235,0.8)';
+      ctx.beginPath(); ctx.moveTo(-16, -8); ctx.lineTo(0, -20); ctx.lineTo(16, -8); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(70,150,200,0.9)';
+      ctx.fillRect(-14, -6, 28, 4);
+      break;
+    }
+    case 'scarecrow': {
+      ctx.strokeStyle = '#8A5A2E'; ctx.lineWidth = 3.5;
+      ctx.beginPath(); ctx.moveTo(0, 14); ctx.lineTo(0, -10); ctx.moveTo(-9, -2); ctx.lineTo(9, -2); ctx.stroke();
+      ctx.fillStyle = '#E8C86A'; ctx.beginPath(); ctx.arc(0, -13, 5.5, 0, 6.29); ctx.fill();
+      ctx.fillStyle = '#C0554A'; ctx.beginPath(); ctx.ellipse(0, -17, 8, 3, 0, 0, 6.29); ctx.fill();
+      break;
+    }
+    case 'lamp': {
+      ctx.strokeStyle = '#5A6270'; ctx.lineWidth = 3.5;
+      ctx.beginPath(); ctx.moveTo(0, 14); ctx.lineTo(0, -12); ctx.stroke();
+      const on = S.time.frac > 0.72 || S.time.frac < 0.26;
+      const gl = on ? 0.75 + 0.25 * Math.sin(t * 3) : 0.2;
+      if (on) {
+        const g = ctx.createRadialGradient(0, -14, 2, 0, -14, 46);
+        g.addColorStop(0, 'rgba(255,220,120,0.4)'); g.addColorStop(1, 'rgba(255,220,120,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, -14, 46, 0, 6.29); ctx.fill();
+      }
+      ctx.fillStyle = `rgba(255,${on ? 220 : 160},100,${gl})`;
+      ctx.beginPath(); ctx.roundRect(-5, -20, 10, 11, 3); ctx.fill();
+      ctx.fillStyle = '#3E4550'; ctx.fillRect(-6, -22, 12, 3);
+      break;
+    }
+    case 'radio': {
+      ctx.fillStyle = '#5A6270';
+      ctx.beginPath(); ctx.roundRect(-15, -8, 30, 22, 4); ctx.fill();
+      ctx.fillStyle = '#3E4550'; ctx.fillRect(-11, -4, 12, 9);
+      ctx.fillStyle = `rgba(120,255,140,${S.lighthouseFound ? 1 : 0.4})`;
+      ctx.fillRect(4, -4, 6, 4);
+      ctx.strokeStyle = '#8A929C'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(10, -8); ctx.lineTo(14, -24); ctx.stroke();
+      const blink = Math.sin(t * 4) > 0;
+      ctx.fillStyle = blink ? '#FF5A4A' : '#7A2820';
+      ctx.beginPath(); ctx.arc(14, -25, 2.5, 0, 6.29); ctx.fill();
+      break;
+    }
+  }
+  ctx.restore();
+}
+function drawProg(ctx, p, icon) {
+  ctx.fillStyle = 'rgba(30,40,50,0.75)';
+  ctx.beginPath(); ctx.roundRect(-16, -30, 32, 8, 4); ctx.fill();
+  ctx.fillStyle = '#FFC94A';
+  ctx.beginPath(); ctx.roundRect(-14, -28.4, 28 * clamp(p, 0, 1), 4.8, 3); ctx.fill();
+  ctx.font = '9px system-ui'; ctx.textAlign = 'center';
+  ctx.fillText(icon, 0, -23.5);
+}
+
+// 建造模式的幽灵预览
+export function drawGhost(ctx, type, c, r) {
+  if (!type) return;
+  const chk = canPlace(type, c, r);
+  const x = c * TILE, y = r * TILE;
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = chk.ok ? 'rgba(90,220,120,0.5)' : 'rgba(230,80,80,0.5)';
+  ctx.fillRect(x, y, TILE, TILE);
+  ctx.globalAlpha = 0.9;
+  ctx.font = '22px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(BUILDINGS[type].emoji, x + TILE / 2, y + TILE / 2 + 2);
+  ctx.strokeStyle = chk.ok ? '#4ADE80' : '#F87171';
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(x + 1, y + 1, TILE - 2, TILE - 2);
+  ctx.restore();
+  return chk;
+}

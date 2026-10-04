@@ -1,0 +1,393 @@
+// ============ 世界：海洋 / 漂流物 / 岛屿 / 航行 ============
+import { S, rand, randi, dist, clamp } from './state.js';
+import { ISLAND_TYPES, TILE, CFG } from './data.js';
+
+const floatersDefs = {
+  plank:   { name: '木板堆', loot: { wood: [2, 4] } },
+  plastic: { name: '塑料瓶', loot: { plastic: [2, 3] } },
+  barrel:  { name: '木桶',   loot: { wood: [2, 3], scrap: [1, 2], seed_berry: [0, 1], seed_potato: [0, 1] } },
+  crate:   { name: '货箱',   loot: { plastic: [1, 3], scrap: [1, 3], rope: [0, 2] } },
+  leaves:  { name: '棕榈叶', loot: { palm_leaf: [2, 4] } },
+  bottle:  { name: '漂流瓶', loot: { map_frag: [0, 1], radio_part: [0, 1], coin: [1, 2] }, rare: true },
+};
+
+// ---------------- 初始化 ----------------
+export function initWorld() {
+  S.entities.floaters = [];
+  S.islands = [];
+  for (let i = 0; i < 11; i++) spawnFloater(true);
+  // 初始岛屿：两座在可视范围外
+  spawnIsland(rand(0, Math.PI * 2), rand(1300, 1800));
+  spawnIsland(rand(0, Math.PI * 2), rand(1600, 2200));
+}
+
+export function spawnFloater(anywhere = false) {
+  const keys = Object.keys(floatersDefs);
+  let type;
+  const r = Math.random();
+  if (r < 0.06) type = 'bottle';
+  else if (r < 0.3) type = 'barrel';
+  else if (r < 0.5) type = 'crate';
+  else if (r < 0.72) type = 'plank';
+  else if (r < 0.86) type = 'plastic';
+  else type = 'leaves';
+  let x, y;
+  if (anywhere) { x = rand(-900, 900); y = rand(-900, 900); }
+  else {
+    const a = rand(0, Math.PI * 2), d = rand(760, 1050);
+    x = Math.cos(a) * d; y = Math.sin(a) * d;
+  }
+  S.entities.floaters.push({
+    x, y, type, rot: rand(0, 6.28), bob: rand(0, 6.28),
+    vx: Math.cos(S.wind.dir) * CFG.currentSpeed * 0.4 + rand(-6, 6),
+    vy: Math.sin(S.wind.dir) * CFG.currentSpeed * 0.4 + rand(-6, 6),
+  });
+}
+
+// ---------------- 岛屿 ----------------
+export function spawnIsland(angle, distance) {
+  const types = Object.keys(ISLAND_TYPES);
+  const type = types[randi(0, types.length - 1)];
+  const T = ISLAND_TYPES[type];
+  const x = Math.cos(angle) * distance, y = Math.sin(angle) * distance;
+  const r = rand(T.r[0], T.r[1]);
+  const isl = { x, y, r, type, visited: false, nodes: [], chest: null, id: ++S.islandMeta.counter };
+  // 资源节点
+  for (let i = 0; i < T.palm; i++) isl.nodes.push(makeNode('palm', isl));
+  for (let i = 0; i < T.rock; i++) isl.nodes.push(makeNode('rock', isl));
+  for (let i = 0; i < T.bush; i++) isl.nodes.push(makeNode('bush', isl));
+  if (Math.random() < T.chest) isl.chest = { x: isl.x + rand(-r * 0.5, r * 0.5), y: isl.y + rand(-r * 0.5, r * 0.5), open: false };
+  S.islands.push(isl);
+  return isl;
+}
+function makeNode(kind, isl) {
+  const a = rand(0, Math.PI * 2), d = rand(0, isl.r * 0.72);
+  return { kind, x: isl.x + Math.cos(a) * d, y: isl.y + Math.sin(a) * d, hp: kind === 'palm' ? 3 : kind === 'rock' ? 4 : 1, shake: 0, respawn: 0 };
+}
+
+// 灯塔岛（修复无线电后出现）
+export function spawnLighthouse() {
+  const a = S.wind.dir + Math.PI * (Math.random() < 0.5 ? 0.4 : -0.4);
+  const isl = spawnIsland(a, 2400);
+  isl.type = 'lighthouse';
+  isl.r = 170;
+  isl.nodes = [makeNode('palm', isl), makeNode('rock', isl)];
+  isl.chest = { x: isl.x + 30, y: isl.y + 10, open: false };
+  S.lighthouseFound = true;
+  return isl;
+}
+
+export function nearestIsland() {
+  let best = null, bd = 1e9;
+  for (const isl of S.islands) {
+    const d = dist(0, 0, isl.x, isl.y) - isl.r;
+    if (d < bd) { bd = d; best = isl; }
+  }
+  return best;
+}
+
+// 玩家能否站立（筏上判定在 raft.js）
+export function islandWalkable(x, y) {
+  for (const isl of S.islands) {
+    if (dist(x, y, isl.x, isl.y) < isl.r * 0.94) return isl;
+  }
+  return null;
+}
+
+// 岛屿太远则移除并补充新的
+function manageIslands() {
+  for (let i = S.islands.length - 1; i >= 0; i--) {
+    const isl = S.islands[i];
+    if (isl.type === 'lighthouse') continue;
+    if (dist(0, 0, isl.x, isl.y) > 4200) S.islands.splice(i, 1);
+  }
+  const near = S.islands.filter(i => dist(0, 0, i.x, i.y) < 3800);
+  if (near.length < 2 && Math.random() < 0.008) {
+    const a = S.wind.dir + rand(-1.2, 1.2);
+    spawnIsland(a, rand(1800, 2600));
+  }
+}
+
+// ---------------- 更新 ----------------
+export function updateWorld(dt, sailDX, sailDY) {
+  // 帆/洋流推动世界（岛屿+漂流物反向移动）
+  if (sailDX || sailDY) {
+    for (const isl of S.islands) { isl.x -= sailDX; isl.y -= sailDY; }
+    for (const f of S.entities.floaters) { f.x -= sailDX; f.y -= sailDY; }
+    S.stats.sailed += Math.hypot(sailDX, sailDY) / 10; // 米
+  }
+  // 漂流物漂移
+  const cur = CFG.currentSpeed;
+  for (const f of S.entities.floaters) {
+    f.x += (Math.cos(S.wind.dir) * cur * 0.5 + f.vx) * dt * 0.4;
+    f.y += (Math.sin(S.wind.dir) * cur * 0.5 + f.vy) * dt * 0.4;
+    f.bob += dt * 2;
+  }
+  // 补充漂流物
+  const wantFlo = S.settings.quality === 'low' ? 7 : 12;
+  S.entities.floaters = S.entities.floaters.filter(f => dist(0, 0, f.x, f.y) < 1250);
+  while (S.entities.floaters.length < wantFlo) spawnFloater();
+  manageIslands();
+}
+
+export function floaterLoot(type) {
+  const def = floatersDefs[type];
+  const got = {};
+  for (const [id, [a, b]] of Object.entries(def.loot)) {
+    const n = randi(a, b);
+    if (n > 0) got[id] = (got[id] || 0) + n;
+  }
+  return got;
+}
+export const FLOATER_NAMES = Object.fromEntries(Object.entries(floatersDefs).map(([k, v]) => [k, v.name]));
+
+// ---------------- 渲染：海洋（屏幕空间） ----------------
+export function drawOcean(ctx, view, t) {
+  const { w, h } = view;
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  if (S.weather.type === 'storm') { g.addColorStop(0, '#6FA9BC'); g.addColorStop(1, '#3E7E96'); }
+  else if (S.weather.type === 'rain') { g.addColorStop(0, '#7FC4CF'); g.addColorStop(1, '#469BB4'); }
+  else { g.addColorStop(0, '#8FE3D9'); g.addColorStop(1, '#3FB3C9'); }
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+
+  // 深水斑（视差移动的大块浅斑）
+  const px = view.x * 0.14, py = view.y * 0.14;
+  ctx.save();
+  ctx.globalAlpha = 0.16;
+  ctx.fillStyle = '#7EDFD2';
+  for (let i = 0; i < 7; i++) {
+    const bx = ((i * 617 + px * 0.6) % (w + 500)) - 250;
+    const by = ((i * 331 + py * 0.6) % (h + 400)) - 200;
+    ctx.beginPath(); ctx.ellipse(bx, by, 190 + i * 33, 110 + i * 17, i * 1.7, 0, 6.29); ctx.fill();
+  }
+  ctx.restore();
+
+  // 波纹带
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.30)';
+  ctx.lineWidth = 2;
+  const off = view.x * 0.35 + view.y * 0.22;
+  for (let i = 0; i < 9; i++) {
+    const yy = ((i * 97 + t * 26 + off * 0.8) % (h + 80)) - 40;
+    ctx.beginPath();
+    for (let x = -10; x <= w + 10; x += 26) {
+      const y2 = yy + Math.sin((x + off + t * 40 + i * 55) * 0.017) * 5;
+      x === -10 ? ctx.moveTo(x, y2) : ctx.lineTo(x, y2);
+    }
+    ctx.globalAlpha = 0.16 + 0.1 * Math.sin(t * 1.4 + i);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 闪光点
+  if (S.settings.quality !== 'low') {
+    ctx.save();
+    ctx.fillStyle = '#FFFFFF';
+    const gx = Math.floor(view.x / 90), gy = Math.floor(view.y / 90);
+    for (let i = -1; i < w / 90 + 2; i++) {
+      for (let j = -1; j < h / 90 + 2; j++) {
+        const h1 = Math.abs(Math.sin((gx + i) * 12.9898 + (gy + j) * 78.233) * 43758.55) % 1;
+        const tw = Math.sin(t * 2.2 + h1 * 40);
+        if (tw > 0.75) {
+          ctx.globalAlpha = (tw - 0.75) * 2.4;
+          ctx.beginPath();
+          ctx.arc(i * 90 + h1 * 80 - view.x % 90, j * 90 + ((h1 * 7) % 1) * 80 - view.y % 90, 1.6, 0, 6.29);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
+  }
+}
+
+// ---------------- 渲染：漂流物 ----------------
+export function drawFloaters(ctx, t) {
+  for (const f of S.entities.floaters) {
+    const bob = Math.sin(f.bob) * 2.5;
+    ctx.save();
+    ctx.translate(f.x, f.y + bob);
+    ctx.rotate(f.rot);
+    // 影
+    ctx.fillStyle = 'rgba(20,60,80,0.25)';
+    ctx.beginPath(); ctx.ellipse(2, 6, 15, 6, 0, 0, 6.29); ctx.fill();
+    switch (f.type) {
+      case 'plank':
+        ctx.fillStyle = '#B07A45'; ctx.fillRect(-16, -6, 32, 12);
+        ctx.fillStyle = '#C98F55'; ctx.fillRect(-16, -6, 32, 4);
+        ctx.strokeStyle = '#8A5A2E'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(-8, -6); ctx.lineTo(-8, 6); ctx.moveTo(6, -6); ctx.lineTo(6, 6); ctx.stroke();
+        break;
+      case 'plastic':
+        ctx.fillStyle = 'rgba(220,245,250,0.95)';
+        ctx.beginPath(); ctx.roundRect(-5, -12, 10, 22, 3); ctx.fill();
+        ctx.fillStyle = '#6EC6E8'; ctx.fillRect(-4, -4, 8, 10);
+        break;
+      case 'barrel':
+        ctx.fillStyle = '#9A6B3B';
+        ctx.beginPath(); ctx.ellipse(0, 0, 14, 10, 0, 0, 6.29); ctx.fill();
+        ctx.fillStyle = '#B5834E';
+        ctx.beginPath(); ctx.ellipse(0, -2, 12, 8, 0, 0, 6.29); ctx.fill();
+        ctx.strokeStyle = '#6F4A24'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(0, 0, 14, 10, 0, 0, 6.29); ctx.stroke();
+        break;
+      case 'crate':
+        ctx.fillStyle = '#C9A06A'; ctx.fillRect(-12, -12, 24, 22);
+        ctx.strokeStyle = '#8A6435'; ctx.lineWidth = 2;
+        ctx.strokeRect(-12, -12, 24, 22);
+        ctx.beginPath(); ctx.moveTo(-12, -12); ctx.lineTo(12, 10); ctx.moveTo(12, -12); ctx.lineTo(-12, 10); ctx.stroke();
+        break;
+      case 'leaves':
+        ctx.fillStyle = '#5FAE5B';
+        for (let i = 0; i < 5; i++) {
+          ctx.save(); ctx.rotate(i * 1.26);
+          ctx.beginPath(); ctx.ellipse(0, -8, 4, 10, 0, 0, 6.29); ctx.fill();
+          ctx.restore();
+        }
+        break;
+      case 'bottle':
+        ctx.fillStyle = 'rgba(180,235,220,0.9)';
+        ctx.beginPath(); ctx.roundRect(-4, -11, 8, 20, 3); ctx.fill();
+        ctx.fillStyle = '#D8B25E'; ctx.fillRect(-3, 6, 6, 5);
+        ctx.fillStyle = '#E8E0C8'; ctx.fillRect(-2.5, -4, 5, 7);
+        break;
+    }
+    ctx.restore();
+  }
+}
+
+// ---------------- 渲染：岛屿 ----------------
+export function drawIslands(ctx, t) {
+  for (const isl of S.islands) {
+    if (dist(0, 0, isl.x, isl.y) > 3400) continue;
+    drawIsland(ctx, isl, t);
+  }
+}
+function drawIsland(ctx, isl, t) {
+  const T = ISLAND_TYPES[isl.type] || ISLAND_TYPES.sand;
+  ctx.save();
+  ctx.translate(isl.x, isl.y);
+  // 浅水圈
+  ctx.fillStyle = 'rgba(160,240,225,0.55)';
+  ctx.beginPath(); ctx.ellipse(0, 4, isl.r * 1.35, isl.r * 1.18, 0, 0, 6.29); ctx.fill();
+  ctx.fillStyle = 'rgba(190,246,235,0.6)';
+  ctx.beginPath(); ctx.ellipse(0, 2, isl.r * 1.18, isl.r * 1.03, 0, 0, 6.29); ctx.fill();
+  // 岛体（不规则边）
+  const col = isl.type === 'lighthouse' ? '#E8E0C8' : T.color;
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  for (let i = 0; i <= 26; i++) {
+    const a = (i / 26) * Math.PI * 2;
+    const rr = isl.r * (0.86 + 0.14 * Math.sin(a * 3 + isl.id * 2.2) + 0.06 * Math.sin(a * 7 + isl.id));
+    const x = Math.cos(a) * rr, y = Math.sin(a) * rr * 0.82;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.closePath(); ctx.fill();
+  // 沙滩高光
+  ctx.strokeStyle = 'rgba(255,250,220,0.8)'; ctx.lineWidth = 5;
+  ctx.stroke();
+  // 岛内纹理
+  ctx.fillStyle = 'rgba(0,0,0,0.06)';
+  ctx.beginPath(); ctx.ellipse(isl.r * 0.15, isl.r * 0.1, isl.r * 0.5, isl.r * 0.32, 0.4, 0, 6.29); ctx.fill();
+
+  if (isl.type === 'lighthouse') drawLighthouse(ctx, t);
+  // 资源节点
+  for (const nd of isl.nodes) {
+    if (nd.hp <= 0) continue;
+    ctx.save();
+    ctx.translate(nd.x - isl.x, nd.y - isl.y);
+    if (nd.shake > 0) ctx.translate(Math.sin(nd.shake * 40) * 2.5, 0);
+    if (nd.kind === 'palm') drawPalm(ctx, t, isl);
+    else if (nd.kind === 'rock') drawRock(ctx);
+    else drawBush(ctx, t);
+    ctx.restore();
+  }
+  // 宝箱
+  if (isl.chest) {
+    ctx.save();
+    ctx.translate(isl.chest.x - isl.x, isl.chest.y - isl.y);
+    ctx.fillStyle = '#8A5A2E';
+    ctx.beginPath(); ctx.roundRect(-11, -9, 22, 16, 3); ctx.fill();
+    ctx.fillStyle = '#D8B25E';
+    ctx.fillRect(-11, -3, 22, 3);
+    ctx.fillRect(-2.5, -6, 5, 9);
+    if (!isl.chest.open) {
+      const glow = 0.5 + 0.5 * Math.sin(t * 3);
+      ctx.strokeStyle = `rgba(255,215,80,${0.4 + glow * 0.5})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.roundRect(-14, -12, 28, 22, 5); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // 名字牌
+  ctx.font = 'bold 13px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(50,60,80,0.75)';
+  const nm = isl.type === 'lighthouse' ? '🗼 灯塔岛' : T.name;
+  ctx.fillText(isl.visited ? nm + ' ·已探索' : nm, 0, -isl.r - 16);
+  ctx.restore();
+}
+function drawPalm(ctx, t, isl) {
+  const sway = Math.sin(t * 1.2 + isl.id) * 3;
+  ctx.strokeStyle = '#9A6B3B'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 8); ctx.quadraticCurveTo(sway * 0.5, -14, sway, -30); ctx.stroke();
+  ctx.fillStyle = '#4E9E4A';
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2 + 0.3;
+    ctx.save(); ctx.translate(sway, -32);
+    ctx.rotate(a * 0.5 - 0.8 + Math.sin(t + i) * 0.05);
+    ctx.beginPath(); ctx.ellipse(14, 0, 15, 5.5, 0.15, 0, 6.29); ctx.fill();
+    ctx.restore();
+  }
+  ctx.fillStyle = '#8A5A2E';
+  ctx.beginPath(); ctx.arc(sway + 3, -28, 3.4, 0, 6.29); ctx.fill();
+  ctx.beginPath(); ctx.arc(sway - 4, -26, 3.2, 0, 6.29); ctx.fill();
+}
+function drawRock(ctx) {
+  ctx.fillStyle = '#8E8A82';
+  ctx.beginPath();
+  ctx.moveTo(-14, 8); ctx.lineTo(-9, -9); ctx.lineTo(2, -14); ctx.lineTo(13, -4); ctx.lineTo(11, 8);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#A8A49A';
+  ctx.beginPath(); ctx.moveTo(-9, -9); ctx.lineTo(2, -14); ctx.lineTo(6, -2); ctx.lineTo(-5, 0); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#6E6A62';
+  ctx.beginPath(); ctx.arc(7, 7, 4, 0, 6.29); ctx.fill();
+}
+function drawBush(ctx, t) {
+  ctx.fillStyle = '#3E8E4A';
+  ctx.beginPath(); ctx.ellipse(0, 0, 13, 10, 0, 0, 6.29); ctx.fill();
+  ctx.fillStyle = '#4FAE5A';
+  ctx.beginPath(); ctx.ellipse(-3, -3, 8, 6, 0, 0, 6.29); ctx.fill();
+  ctx.fillStyle = '#E84A6A';
+  const n = 3 + Math.floor(Math.sin(t * 0.5) * 0);
+  for (let i = 0; i < n; i++) { ctx.beginPath(); ctx.arc(-6 + i * 6, -2 + (i % 2) * 4, 2.6, 0, 6.29); ctx.fill(); }
+}
+function drawLighthouse(ctx, t) {
+  ctx.save();
+  ctx.translate(0, -6);
+  // 底座
+  ctx.fillStyle = '#E8E4DA';
+  ctx.beginPath(); ctx.moveTo(-26, 30); ctx.lineTo(-18, -52); ctx.lineTo(18, -52); ctx.lineTo(26, 30); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#E05A4A';
+  ctx.beginPath(); ctx.moveTo(-22, 8); ctx.lineTo(-20, -8); ctx.lineTo(20, -8); ctx.lineTo(22, 8); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-19, -26); ctx.lineTo(-18, -40); ctx.lineTo(18, -40); ctx.lineTo(19, -26); ctx.closePath(); ctx.fill();
+  // 灯室
+  ctx.fillStyle = '#5A6270';
+  ctx.beginPath(); ctx.roundRect(-14, -66, 28, 15, 3); ctx.fill();
+  const glow = 0.55 + 0.45 * Math.sin(t * 2.4);
+  ctx.fillStyle = `rgba(255,235,140,${glow})`;
+  ctx.beginPath(); ctx.arc(0, -58, 7, 0, 6.29); ctx.fill();
+  ctx.strokeStyle = '#3E4550'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-16, -66); ctx.lineTo(16, -66); ctx.stroke();
+  // 旋转光束
+  const a = t * 0.9;
+  ctx.save();
+  ctx.translate(0, -58); ctx.rotate(a);
+  const lg = ctx.createLinearGradient(0, 0, 190, 0);
+  lg.addColorStop(0, `rgba(255,240,170,${0.5 * glow})`);
+  lg.addColorStop(1, 'rgba(255,240,170,0)');
+  ctx.fillStyle = lg;
+  ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(190, -26); ctx.lineTo(190, 26); ctx.lineTo(0, 5); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  ctx.restore();
+}
