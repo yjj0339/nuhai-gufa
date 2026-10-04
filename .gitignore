@@ -2,3 +2,4 @@ server.log
 shots/
 node_modules/
 qr-live.png
+.mimosa/
