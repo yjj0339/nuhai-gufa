@@ -5,7 +5,7 @@ import { eff, grantXP } from './upgrades.js';
 import { addItem, countItem, removeItem } from './inv.js';
 import { tileAt, isOnRaft, nearestInteractable, farmInteract, sleepBed, hasBuilding, findBuilding } from './raft.js';
 import { islandWalkable } from './world.js';
-import { tryTakeUnderNode, hitShark, sharkNearPlayer, hitGull, spawnSplash, spawnBubbles, spawnHitStar, tryTakeWreckNode, dolphinNearPlayer } from './entities.js';
+import { tryTakeUnderNode, hitShark, sharkNearPlayer, hitGull, spawnSplash, spawnBubbles, spawnHitStar, tryTakeWreckNode, dolphinNearPlayer, nearestTentacle, hitTentacle } from './entities.js';
 import { startFishing, stopFishing } from './fishing.js';
 import { sfx } from './audio.js';
 
@@ -26,7 +26,7 @@ export function updatePlayer(dt) {
 
   if (p.swimming) {
     p.x = nx; p.y = ny;
-    p.oxygen -= dt * (dolphinNearPlayer() ? 0.55 : 1);
+    p.oxygen -= dt * (dolphinNearPlayer() ? 0.55 : 1) * (S.gear.krakenAmulet ? 0.65 : 1);
     spawnBubbles(p.x, p.y, dt > 0.5 ? 1 : (Math.random() < dt * 2 ? 1 : 0));
     if (p.oxygen <= 0) {
       p.oxygen = 0;
@@ -192,6 +192,9 @@ export function doAttack() {
     const base = tool === 'blade' ? 3 : tool === 'spear_metal' ? 2 : 1;
     const dmg = eff.spearDmg(base);
     const reach = tool === 'blade' || tool === 'spear_metal' ? 95 : 64;
+    // 优先打触手
+    const tn = nearestTentacle(reach + 20);
+    if (tn) { hitTentacle(tn, dmg); return; }
     const shark = sharkNearPlayer(reach);
     if (shark) { hitShark(shark, dmg); spawnHitStar(shark.x, shark.y); return; }
     // 海鸥（在头顶低空）

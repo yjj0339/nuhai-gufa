@@ -32,6 +32,8 @@ export function saveGame(silent = false) {
     upgrades: S.upgrades,
     gear: S.gear,
     daily: S.daily,
+    letters: S.letters,
+    krakenTimerDay: S.krakenTimerDay,
     lastBossDay: S.lastBossDay,
     islands: S.islands.map(i => ({
       x: i.x, y: i.y, r: i.r, type: i.type, visited: i.visited,
@@ -79,6 +81,9 @@ export function loadGame() {
   S.upgrades = d.upgrades || {};
   S.gear = d.gear || { sharkSail: false };
   S.daily = d.daily || { day: 1, id: null, goal: 0, prog: 0, done: false };
+  S.letters = d.letters || [];
+  S.krakenTimerDay = d.krakenTimerDay || 10;
+  S.kraken = null;
   S.lastBossDay = d.lastBossDay || 0;
   // 岛屿
   S.islands = (d.islands || []).map(i => ({
@@ -96,7 +101,7 @@ export function loadGame() {
   S.entities.fish = []; S.entities.parts = []; S.entities.bubbles = [];
   S.entities.vortices = []; S.entities.wrecks = [];
   S.entities.merchant = null; S.entities.dolphin = null;
-  S.whale = null; S.meteors = []; S.meteorShower = 0; S.bargain = null;
+  S.whale = null; S.meteors = []; S.meteorShower = 0; S.bargain = null; S.kraken = null;
   S.merchantTimer = 160; S.wreckTimer = 200; S.vortexTimer = 240; S.dolphinTimer = 140; S.whaleTimer = 220;
   S.hook = null; S.fishing = null;
   initTransient();
@@ -122,6 +127,9 @@ export function newGame() {
   S.xp = 0; S.level = 1; S.skillPts = 0; S.upgrades = {};
   S.gear = { sharkSail: false };
   S.daily = { day: 1, id: null, goal: 0, prog: 0, done: false };
+  S.letters = [];
+  S.kraken = null;
+  S.krakenTimerDay = 10;
   S.lastBossDay = 0;
   S.merchantTimer = 160; S.wreckTimer = 200; S.vortexTimer = 240; S.dolphinTimer = 140; S.whaleTimer = 220;
   S.time = { day: 1, frac: 0.28 };
@@ -131,7 +139,7 @@ export function newGame() {
     sailed: 0, radioFixed: 0, rescued: 0, rainTime: 0, gullShoo: 0,
     diveTake: 0, tiles: 9, lantern: 0, deaths: 0, playTime: 0, lighthouse: 0,
     bossKill: 0, trades: 0, dolphinTime: 0, vortexLoot: 0, wrecks: 0, bought: 0,
-    gearBlade: 0, dailyDone: 0, whale: 0, meteorWish: 0, bargainWins: 0,
+    gearBlade: 0, dailyDone: 0, whale: 0, meteorWish: 0, bargainWins: 0, krakenKill: 0,
   };
   S.quests = { idx: 0, done: [] };
   S.achievements = new Set();

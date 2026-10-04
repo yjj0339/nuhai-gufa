@@ -1,6 +1,6 @@
 // ============ UI：HUD / 面板 / 手机操控 ============
 import { S, bus, toast, clamp, fmtTime } from './state.js';
-import { ITEMS, RECIPES, BUILDINGS, STATION_RECIPES, QUESTS, ACHIEVEMENTS, CFG, TILE, SELL_PRICES } from './data.js';
+import { ITEMS, RECIPES, BUILDINGS, STATION_RECIPES, QUESTS, ACHIEVEMENTS, CFG, TILE, SELL_PRICES, LETTERS } from './data.js';
 import { countItem, countTag, craft, startStationCook, addItem, buyStock, sellItem } from './inv.js';
 import { canPlace, place, hasBuilding, findBuilding } from './raft.js';
 import { nearestIsland } from './world.js';
@@ -34,6 +34,7 @@ export function initUI() {
       <button data-a="upg" title="升级">⭐</button>
       <button data-a="quests" title="任务">📜</button>
       <button data-a="achv" title="成就">🏆</button>
+      <button data-a="letters" title="信件册">📖</button>
       <button data-a="map" title="海图">🗺️</button>
       <button data-a="stats" title="统计">📊</button>
       <button data-a="help" title="帮助">❓</button>
@@ -93,6 +94,7 @@ export function handleAction(a, btn) {
     case 'settings': openPanel('settings'); break;
     case 'upg': openPanel('upg'); break;
     case 'stats': openPanel('stats'); break;
+    case 'letters': openPanel('letters'); break;
     case 'buildCancel': S.ui.buildSel = null; updateBuildBar(); break;
     case 'use': S.input.use = true; break;
     case 'attack': S.input.attack = true; S.input.fishingHold = true; break;
@@ -554,11 +556,24 @@ function renderPanel() {
       ['🐋', '观鲸', st.whale + ' 次'],
       ['✨', '流星许愿', st.meteorWish + ' 次'],
       ['🤝', '砍价成功', st.bargainWins + ' 次'],
+      ['🦑', '击退克拉肯', st.krakenKill + ' 次'],
+      ['📖', '信件收集', S.letters.length + ' / 12 封'],
       ['💀', '倒下次数', st.deaths],
     ];
     html += `<div class="rows">`;
     for (const [em, k, v] of rows) {
       html += `<div class="row"><span class="em big">${em}</span><div class="grow"><b>${k}</b></div><b style="color:#5A4A2A">${v}</b></div>`;
+    }
+    html += `</div>`;
+  }
+  else if (which === 'letters') {
+    html += `<p class="hint">打捞漂流瓶获得信件 · 已收集 <b>${S.letters.length}/${LETTERS.length}</b>${S.letters.length >= LETTERS.length ? ' · 🎉集齐！' : ''}</p><div class="rows">`;
+    for (const l of LETTERS) {
+      const got = S.letters.includes(l.id);
+      html += `<div class="row ${got ? '' : 'locked'}">
+        <span class="em big">${got ? '📖' : '❓'}</span>
+        <div class="grow"><b>${got ? l.title : '？？？'}</b><small>${got ? l.text : '尚未捡到这封信'}</small></div>
+      </div>`;
     }
     html += `</div>`;
   }
@@ -592,7 +607,7 @@ function renderPanel() {
   if (which === 'map') drawBigMap();
 }
 
-const PANEL_TITLES = { inv: '🎒 背包', craft: '🛠️ 合成', build: '🏗️ 建造', quests: '📜 主线任务', achv: '🏆 成就', map: '🗺️ 海图', settings: '⚙️ 设置', help: '❓ 帮助', station: '🏭 工作台', upg: '⭐ 船长成长', shop: '🛒 商筏集市', stats: '📊 航海统计' };
+const PANEL_TITLES = { inv: '🎒 背包', craft: '🛠️ 合成', build: '🏗️ 建造', quests: '📜 主线任务', achv: '🏆 成就', map: '🗺️ 海图', settings: '⚙️ 设置', help: '❓ 帮助', station: '🏭 工作台', upg: '⭐ 船长成长', shop: '🛒 商筏集市', stats: '📊 航海统计', letters: '📖 信件册' };
 
 function drawBigMap() {
   const cv = $('#bigmap');

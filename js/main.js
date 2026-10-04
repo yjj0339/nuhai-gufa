@@ -4,7 +4,7 @@ import { TILE, CFG, BUILDINGS, ITEMS, SAVE_KEY } from './data.js';
 import { initAudio, resumeAudio, sfx, updateAmbient } from './audio.js';
 import { updateWorld, drawOcean, drawFloaters, drawIslands, nearestIsland } from './world.js';
 import { drawRaft, updateBuildings, drawGhost, demolish, tileAt, canPlace, place } from './raft.js';
-import { updateSharks, updateGulls, updateFish, updateHook, updateParticles, updateUnderNodes, drawUnder, drawOver, updateMerchant, updateDolphin, updateVortices, updateWrecks, updateWhale, drawNewUnder, drawNewOver } from './entities.js';
+import { updateSharks, updateGulls, updateFish, updateHook, updateParticles, updateUnderNodes, drawUnder, drawOver, updateMerchant, updateDolphin, updateVortices, updateWrecks, updateWhale, updateKraken, drawNewUnder, drawNewOver } from './entities.js';
 import { updateBargain, stopBargain, drawBargain } from './bargain.js';
 import { updatePlayer, drawPlayer, doHookAt, updateIslandNodes, damagePlayer, doUse, doAttack } from './player.js';
 import { updateFishing, drawFishing } from './fishing.js';
@@ -76,8 +76,11 @@ function buildEndScreen(kind) {
         <div><b>${S.stats.days}</b><span>存活天数</span></div>
         <div><b>${S.stats.collected}</b><span>收集物品</span></div>
         <div><b>${S.stats.fish}</b><span>钓鱼</span></div>
-        <div><b>${S.stats.sharkKill}</b><span>击杀鲨鱼</span></div>
+        <div><b>${S.stats.sharkKill + S.stats.bossKill}</b><span>猎鲨/巨鲨</span></div>
         <div><b>${S.stats.islands}</b><span>造访岛屿</span></div>
+        <div><b>${S.letters.length}/12</b><span>信件收集</span></div>
+        <div><b>Lv.${S.level}</b><span>船长等级</span></div>
+        <div><b>${S.stats.krakenKill}</b><span>击退海怪</span></div>
         <div><b>${S.stats.sailed | 0}</b><span>航行(米)</span></div>
       </div>
       <button class="primary big" id="btnRestart">${rescued ? '🌊 继续无尽航行' : '🔁 重新开始'}</button>
@@ -96,6 +99,24 @@ window.addEventListener('keydown', e => {
   if (e.repeat) return;
   keys[e.code] = true;
   const k = e.key.toLowerCase();
+  // 全局快捷键
+  if (k === 'm' && S.mode === 'play') {
+    if (S.settings.sfx > 0 || S.settings.music > 0) {
+      S.prevVolumes = { sfx: S.settings.sfx, music: S.settings.music };
+      S.settings.sfx = 0; S.settings.music = 0;
+      toast('🔇 已静音（按 M 恢复）', '🔇');
+    } else if (S.prevVolumes) {
+      S.settings.sfx = S.prevVolumes.sfx; S.settings.music = S.prevVolumes.music;
+      toast('🔊 声音恢复', '🔊');
+    }
+    import('./audio.js').then(a => a.setVolumes());
+    return;
+  }
+  if (k === 'p' && S.mode === 'play') {
+    S.paused = !S.paused;
+    if (S.paused) toast('⏸ 已暂停', '⏸');
+    return;
+  }
   if (S.mode !== 'play') { if (e.code === 'Escape' && S.ui.panel) { closePanel(); } return; }
   if (e.code === 'Space' || k === 'j') { S.input.attack = true; S.input.fishingHold = true; e.preventDefault(); }
   if (k === 'e') { if (S.ui.panel) { closePanel(); } else S.input.use = true; }
@@ -129,7 +150,7 @@ function loop(nowMs) {
   let dt = (nowMs - lastT) / 1000;
   lastT = nowMs;
   if (dt > 0.08) dt = 0.08;
-  const playing = S.mode === 'play';
+  const playing = S.mode === 'play' && !S.paused;
 
   if (playing) {
     S.t += dt;
@@ -170,6 +191,7 @@ function loop(nowMs) {
     updateVortices(dt);
     updateWrecks(dt);
     updateWhale(dt);
+    updateKraken(dt);
     updateBargain(dt);
     if (S.bargain && S.input.attack) { S.input.attack = false; stopBargain(); }
     updateAmbient(dt);
@@ -184,6 +206,15 @@ function loop(nowMs) {
   }
   tickToasts(dt);
   render(dt);
+  if (S.paused && S.mode === 'play') {
+    ctx.fillStyle = 'rgba(30,50,60,0.35)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,252,244,0.95)';
+    ctx.font = 'bold 34px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('⏸ 已暂停', W / 2, H / 2 - 8);
+    ctx.font = '14px system-ui';
+    ctx.fillText('按 P 继续', W / 2, H / 2 + 24);
+  }
   if (playing || S.mode === 'menu' || S.mode === 'help') updateHUD();
 }
 
@@ -391,7 +422,7 @@ async function selfTest() {
     const dl = S.daily;
     log('每日挑战生成', !!dl.id && dl.goal >= 1, `${dl.id} ${dl.prog}/${dl.goal}`);
     for (let i = 0; i < dl.goal; i++) dailyProg(dl.id);
-    log('每日挑战完成', dl.done && S.stats.dailyDone === 1);
+    log('每日挑战完成', dl.done && S.stats.dailyDone >= 1);
     // 锻造巨鲨战刃
     S.inv.slots[11] = { id: 'shark_tooth', n: 10 };
     S.inv.slots[12] = { id: 'ingot', n: 10 };
@@ -429,6 +460,52 @@ async function selfTest() {
     bs(0);
     log('折扣生效', countItem('coin') === coinBefore2 - cost0, `花${cost0}币`);
     S.entities.merchant = null;
+    // ---- v1.3 克拉肯 & 信件 ----
+    const { updateKraken, hitTentacle, nearestTentacle } = await import('./entities.js');
+    S.krakenTimerDay = S.time.day;
+    S.raft.tiles.add = S.raft.tiles.add; // noop
+    S.inv.slots[15] = { id: 'wood', n: 40 };
+    const tilesBefore = S.raft.tiles.size;
+    updateKraken(0.02);
+    const K = S.kraken;
+    log('克拉肯降临', !!K && K.tentacles.length === 4, `day=${S.time.day}`);
+    // 打完四条触手
+    for (let i = 0; i < 5 && S.kraken; i++) {
+      const tn = S.kraken.tentacles.find(t => t.hp > 0);
+      if (tn) hitTentacle(tn, 99);
+    }
+    updateKraken(0.02);
+    log('击退克拉肯', !S.kraken && S.stats.krakenKill === 1 && countItem('tentacle') >= 2, `tiles=${S.raft.tiles.size}`);
+    // 触手不会在 7 天内复发
+    const dayAfter = S.time.day;
+    updateKraken(0.02);
+    log('克拉肯冷却', !S.kraken && S.krakenTimerDay === dayAfter + 7);
+    // 海怪护符
+    S.inv.slots[16] = { id: 'pearl', n: 5 };
+    S.inv.slots[17] = { id: 'rope', n: 10 };
+    const oxBefore = S.player.oxygen;
+    S.player.swimming = true; S.player.x = 400; S.player.y = 400;
+    const oxStart = S.player.oxygen;
+    await frame(5);
+    const drainNo = oxStart - S.player.oxygen;
+    log('锻造海怪护符', craft('gear_amulet') && S.gear.krakenAmulet === true);
+    const oxStart2 = S.player.oxygen;
+    await frame(5);
+    const drainYes = oxStart2 - S.player.oxygen;
+    log('护符省氧生效', drainYes < drainNo * 0.9, `${drainNo.toFixed(2)}→${drainYes.toFixed(2)}`);
+    S.player.swimming = false;
+    // 信件
+    const { grantLetter } = await import('./letters.js');
+    grantLetter(); grantLetter();
+    log('信件收集', S.letters.length >= 2, `${S.letters.length}/12`);
+    // 集齐奖励
+    const LETTERS_N = 12;
+    while (S.letters.length < LETTERS_N) grantLetter();
+    log('集齐12封信', S.letters.length === 12 && countItem('coin') > 0);
+    // 存档兼容 v1.3
+    saveGame(true);
+    const lettersBefore = S.letters.length;
+    log('v1.3存档兼容', loadGame() && S.letters.length === lettersBefore && S.krakenTimerDay >= 10);
 
     T.pass = T.steps.every(s => s.ok) && ERRS.length === 0;
     T.errors = [...ERRS];

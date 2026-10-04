@@ -53,6 +53,7 @@ export const ITEMS = {
   spear:       { name: '木矛',     emoji: '🔱', type: 'tool', stack: 1, desc: '近战武器，能赶走鲨鱼。' },
   spear_metal: { name: '金属矛',   emoji: '⚔️', type: 'tool', stack: 1, desc: '更锋利更耐用，鲨鱼的噩梦。' },
   blade:       { name: '巨鲨战刃', emoji: '🗡️', type: 'tool', stack: 1, desc: '巨鲨之牙锻成的利刃，伤害惊人。' },
+  tentacle:    { name: '克拉肯触手', emoji: '🦑', type: 'material', stack: 20, tags: ['food'], desc: '海怪的触手，能吃也能锻造。' },
   hammer:      { name: '锤子',     emoji: '🔨', type: 'tool', stack: 1, desc: '建造与拆除建筑必备。' },
   rod:         { name: '鱼竿',     emoji: '🎣', type: 'tool', stack: 1, desc: '在筏边钓鱼，夜里鱼更肥。' },
   // 特殊
@@ -76,6 +77,23 @@ export const RECIPES = [
   { id: 'seed_berry', out: { seed_berry: 1 }, in: { berry: 2 },                              desc: '留种' },
   { id: 'gear_blade', out: { blade: 1 },      in: { shark_tooth: 2, ingot: 2, wood: 2 },     desc: '巨鲨战刃（伤害3，巨鲨掉牙锻造）' },
   { id: 'gear_sail',  out: {},                in: { shark_tooth: 3, cloth: 4, rope: 2 },     gear: 'sharkSail', desc: '鲨鱼皮帆：航行速度 +25%（消耗鲨鱼牙鞣制）' },
+  { id: 'gear_amulet',out: {},                in: { tentacle: 2, pearl: 1, rope: 2 },        gear: 'krakenAmulet', desc: '海怪护符：潜水氧气消耗再 -35%（佩戴永久生效）' },
+];
+
+// ---------------- 漂流瓶信件（12封航海故事） ----------------
+export const LETTERS = [
+  { id: 'l1',  title: '远航的第一天',       text: '「风从东南来，我们满帆出港。甲板上的水手唱着歌，没人想到这是最后一次靠岸。」' },
+  { id: 'l2',  title: '老船长的话',         text: '「孩子，海上最危险的不是风暴，是你忘了自己为什么出发。」——捡到这只瓶子的人，愿你还记得。' },
+  { id: 'l3',  title: '半张航海图',         text: '图上标注着一片从未有人回来的海域。我用炭笔写下：如果有人捡到，别去。但如果非去不可，带上足够的水。' },
+  { id: 'l4',  title: '给女儿的信',         text: '「小渔：爸爸给你抓了一只海星，它有五条腿。等你生日我就回家。爸爸在 very far 的船上。」' },
+  { id: 'l5',  title: '灯塔守护者',         text: '「灯塔的灯油还够烧四十天。四十天后如果没有补给船……我宁愿不去想。至少今夜，光还亮着。」' },
+  { id: 'l6',  title: '遇难的第三天',       text: '「淡水只剩两桶。我们开始接雨水喝。老李说，海上没有真正的绝路，只有不肯改航向的人。」' },
+  { id: 'l7',  title: '海怪目击记录',       text: '「昨晚海面下有巨大的影子绕着船转了三圈。它有八条触手。大副说那是克拉肯。我不信。但今天我们绕道走了。」' },
+  { id: 'l8',  title: '商人的账本',         text: '「珍珠十二颗，古币三十枚，皆沉于礁石之南。谁能取走便是谁的。——反正我上不了岸了。」' },
+  { id: 'l9',  title: '一封没有寄出的信',   text: '「娘：儿在海上一切都好，吃得饱穿得暖。就是想你了。等挣够了钱……」信到这里就断了，墨迹被海水晕开。' },
+  { id: 'l10', title: '鱼群的秘密',         text: '「灯笼鱼只在没有月亮的夜里浮上来，追着船头的灯光。想钓它们，就得学会在黑暗里等待。」' },
+  { id: 'l11', title: '最后的泊船地',       text: '「我们决定在灯塔岛抛锚。那里有淡水，有野果，灯室够住下所有人。如果运气好，等来一艘船。」' },
+  { id: 'l12', title: '给拾到瓶子的人',     text: '「恭喜你，集齐了这些信。它们没有宝藏图，只有一个真相：写这些信的人都活下来了。你也一样。——海上的朋友」' },
 ];
 
 // ---------------- 每日挑战 ----------------
@@ -199,6 +217,10 @@ export const ACHIEVEMENTS = [
   { id: 'a_whale', name: '鲸奇相遇',     desc: '目睹一次鲸鱼巡游',     check: s => s.stats.whale >= 1 },
   { id: 'a_meteor',name: '对流星许愿',   desc: '流星雨夜许下愿望',     check: s => s.stats.meteorWish >= 1 },
   { id: 'a_barg',  name: '砍价鬼才',     desc: '在商筏砍价成功',       check: s => s.stats.bargainWins >= 1 },
+  { id: 'a_kraken',name: '触手克星',     desc: '击退克拉肯海怪',       check: s => s.stats.krakenKill >= 1 },
+  { id: 'a_amulet',name: '深渊祝福',     desc: '佩戴海怪护符',         check: s => s.gear.krakenAmulet === true },
+  { id: 'a_let6',  name: '故事搜集者',   desc: '收集 6 封漂流瓶信件',  check: s => s.letters.length >= 6 },
+  { id: 'a_let12', name: '海上史官',     desc: '集齐全部 12 封信件',   check: s => s.letters.length >= 12 },
   { id: 'a_end',   name: '灯塔之约',     desc: '完成主线：获救',       check: s => s.stats.rescued >= 1 },
 ];
 

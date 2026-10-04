@@ -35,13 +35,18 @@ export const S = {
   whale: null,
   meteors: [], meteorShower: 0,
   bargain: null,
+  kraken: null,            // {tentacles:[], t, nextDay}
+  krakenTimerDay: 10,      // 首次出现天数
+  letters: [],             // 已收集信件 id
+  paused: false,
+  prevVolumes: null,
   stats: {
     days: 1, collected: 0, fish: 0, cooked: 0, drank: 0, ingots: 0,
     sharkFlee: 0, sharkKill: 0, harvest: 0, islands: 0, chests: 0,
     sailed: 0, radioFixed: 0, rescued: 0, rainTime: 0, gullShoo: 0,
     diveTake: 0, tiles: 0, lantern: 0, deaths: 0, playTime: 0,
     bossKill: 0, trades: 0, dolphinTime: 0, vortexLoot: 0, wrecks: 0, bought: 0,
-    gearBlade: 0, dailyDone: 0, whale: 0, meteorWish: 0, bargainWins: 0,
+    gearBlade: 0, dailyDone: 0, whale: 0, meteorWish: 0, bargainWins: 0, krakenKill: 0,
   },
   quests: { idx: 0, done: [] },
   achievements: new Set(),

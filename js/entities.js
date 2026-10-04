@@ -7,6 +7,8 @@ import { dailyProg } from './daily.js';
 import { tileAt, edgeTiles, hasBuilding } from './raft.js';
 import { floaterLoot } from './world.js';
 import { sfx } from './audio.js';
+// damagePlayer 延迟引用，避免与 player.js 循环导入
+let damagePlayer = (n, m) => import('./player.js').then(mo => mo.damagePlayer(n, m));
 
 // ---------------- 水下资源点 ----------------
 const UNDER_KINDS = {
@@ -373,6 +375,7 @@ export function updateHook(dt) {
           let loot = floaterLoot(f.type);
           if (lucky()) { for (const k in loot) loot[k] *= 2; toast('🍀 幸运一钩，双倍收获！', '🍀'); }
           grantLoot(loot);
+          if (f.type === 'bottle') import('./letters.js').then(m => m.grantLetter());
           grantXP(3);
           dailyProg('loot');
           sfx.hookGot();
@@ -773,6 +776,114 @@ export function updateWhale(dt) {
   }
 }
 
+// ================= 克拉肯 =================
+export function updateKraken(dt) {
+  // 每 7 天（首次第 10 天）触发
+  if (!S.kraken && S.mode === 'play' && S.time.day >= S.krakenTimerDay) {
+    spawnKraken();
+  }
+  const K = S.kraken;
+  if (!K) return;
+  K.t += dt;
+  const p = S.player;
+  let alive = 0;
+  for (const tn of K.tentacles) {
+    if (tn.hp <= 0) { tn.deadT = (tn.deadT || 0) + dt; continue; }
+    alive++;
+    tn.t += dt;
+    tn.sway = Math.sin(tn.t * 2 + tn.phase) * 8;
+    if (tn.state === 'rise') {
+      tn.rise = Math.min(1, tn.rise + dt * 0.9);
+      if (tn.rise >= 1) { tn.state = 'hunt'; tn.atkT = rand(1.5, 3); }
+    } else if (tn.state === 'hunt') {
+      tn.atkT -= dt;
+      // 微微追踪玩家
+      const d = dist(tn.x, tn.y, p.x, p.y);
+      if (d > 130) {
+        tn.x += (p.x - tn.x) / d * 26 * dt;
+        tn.y += (p.y - tn.y) / d * 26 * dt;
+      }
+      if (tn.atkT <= 0) { tn.state = 'slam'; tn.slamT = 0.6; sfx.splash(); }
+    } else if (tn.state === 'slam') {
+      tn.slamT -= dt;
+      if (tn.slamT <= 0) {
+        // 落点判定：砸玩家 / 砸边缘地板
+        const d = dist(tn.x, tn.y, p.x, p.y);
+        if (d < 46) {
+          damagePlayer(14, '被触手拍进了海里！');
+          p.swimming = true;
+          p.x += (p.x - tn.x) / (d || 1) * 30;
+          p.y += (p.y - tn.y) / (d || 1) * 30;
+          p._climbCd = 1.2;
+        } else {
+          const t = tileAt(tn.x, tn.y);
+          if (t && !t.net && !t.armor) {
+            t.hp--;
+            spawnSplash(tn.x, tn.y, 10);
+            S.shakeT = 0.35;
+            if (t.hp <= 0) {
+              if (t.b) { delete S.cooking[t.c + ',' + t.r]; delete S.farmPlots[t.c + ',' + t.r]; }
+              S.raft.tiles.delete(t.c + ',' + t.r);
+              S.stats.tiles = S.raft.tiles.size;
+              toast('触手卷走了一块地板！', '🦑');
+            }
+          }
+        }
+        tn.state = 'hunt';
+        tn.atkT = rand(2.2, 4);
+      }
+    }
+  }
+  if (alive === 0 && K.tentacles.length) {
+    // 击退奖励
+    S.kraken = null;
+    S.krakenTimerDay = S.time.day + 7;
+    S.stats.krakenKill++;
+    const loot = { tentacle: randi(2, 3), pearl: randi(1, 2), coin: randi(6, 10) };
+    if (Math.random() < 0.5) loot.map_frag = 1;
+    grantLoot(loot, '克拉肯战利品');
+    toast('触手尽数沉入海底——克拉肯被击退了！', '🏆');
+    grantXP(80);
+    sfx.achv();
+    S.shakeT = 0.4;
+  }
+}
+function spawnKraken() {
+  S.krakenTimerDay = S.time.day + 7;
+  const tentacles = [];
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + rand(-0.3, 0.3);
+    const d = rand(120, 160);
+    tentacles.push({ x: Math.cos(a) * d, y: Math.sin(a) * d, hp: 4, state: 'rise', rise: 0, t: 0, atkT: 0, slamT: 0, phase: rand(0, 6), sway: 0, dir: a });
+  }
+  S.kraken = { tentacles, t: 0 };
+  toast('⚠️ 海水泛起漩涡——克拉肯的触手从四面八方升起了！', '🦑');
+  sfx.thunder();
+  S.shakeT = 0.6;
+}
+export function hitTentacle(tn, dmg) {
+  tn.hp -= dmg;
+  sfx.hit();
+  spawnSplash(tn.x, tn.y, 6);
+  spawnHitStar(tn.x, tn.y - 20);
+  if (tn.hp <= 0) {
+    toast('斩断了一条触手！剩余 ' + S.kraken.tentacles.filter(t => t.hp > 0).length + ' 条', '⚔️');
+    grantXP(15);
+    sfx.sharkFlee();
+  }
+}
+export function nearestTentacle(range = 90) {
+  if (!S.kraken) return null;
+  const p = S.player;
+  let best = null, bd = range;
+  for (const tn of S.kraken.tentacles) {
+    if (tn.hp <= 0) continue;
+    const d = dist(p.x, p.y, tn.x, tn.y);
+    if (d < bd) { bd = d; best = tn; }
+  }
+  return best;
+}
+
 // ================= 新实体渲染 =================
 export function drawNewUnder(ctx, t) {
   // 沉船
@@ -815,6 +926,57 @@ export function drawNewUnder(ctx, t) {
   }
 }
 export function drawNewOver(ctx, t) {
+  // 克拉肯触手（最底层画）
+  const K = S.kraken;
+  if (K) {
+    // 警示圈
+    ctx.save();
+    ctx.strokeStyle = `rgba(180,60,180,${0.25 + 0.15 * Math.sin(t * 3)})`;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([14, 10]);
+    ctx.beginPath(); ctx.arc(0, 0, 210, 0, 6.29); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    for (const tn of K.tentacles) {
+      ctx.save();
+      ctx.translate(tn.x, tn.y);
+      if (tn.hp <= 0) {
+        ctx.globalAlpha = Math.max(0, 1 - (tn.deadT || 0) / 1.5);
+        ctx.rotate((tn.deadT || 0) * 1.2);
+      }
+      const rise = tn.state === 'rise' ? tn.rise : 1;
+      const len = 46 * rise;
+      // 触手主体（弯曲锥形）
+      const dx = Math.cos(tn.dir), dy = Math.sin(tn.dir);
+      ctx.fillStyle = tn.hp <= 0 ? '#5A4A6A' : '#6A4A8A';
+      ctx.beginPath();
+      ctx.moveTo(-dy * 13, dx * 13);
+      ctx.quadraticCurveTo(-dy * 10 + dx * len * 0.5, dx * 10 + dy * len * 0.5 + tn.sway, dx * len + tn.sway, dy * len - rise * 26);
+      ctx.quadraticCurveTo(dy * 10 + dx * len * 0.5, -dx * 10 + dy * len * 0.5 + tn.sway, dy * -13, dx * -13);
+      ctx.closePath(); ctx.fill();
+      // 吸盘
+      ctx.fillStyle = 'rgba(230,180,255,0.55)';
+      for (let i = 1; i <= 3; i++) {
+        const px = dx * len * i / 3.4, py = dy * len * i / 3.4 + tn.sway * i / 3;
+        ctx.beginPath(); ctx.arc(px - dy * 5, py + dx * 5, 3.2 - i * 0.5, 0, 6.29); ctx.fill();
+      }
+      // 尖端
+      if (tn.hp > 0 && rise >= 1) {
+        ctx.fillStyle = '#B46AE8';
+        ctx.beginPath(); ctx.arc(dx * len + tn.sway, dy * len - rise * 26, 6, 0, 6.29); ctx.fill();
+        ctx.fillStyle = '#3A2A4A';
+        ctx.beginPath(); ctx.arc(dx * len + tn.sway - 1.5, dy * len - rise * 26 - 1.5, 2, 0, 6.29); ctx.fill();
+      }
+      // 血条
+      if (tn.hp > 0 && rise >= 1) {
+        ctx.fillStyle = 'rgba(20,40,50,0.6)';
+        ctx.beginPath(); ctx.roundRect(-16, -44, 32, 6, 3); ctx.fill();
+        ctx.fillStyle = '#C05AE8';
+        ctx.beginPath(); ctx.roundRect(-15, -43, 30 * (tn.hp / 4), 4, 2); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
   // 鲸鱼（在漩涡/海豚之下先画）
   const wh = S.whale;
   if (wh) {
