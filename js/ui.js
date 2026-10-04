@@ -65,11 +65,13 @@ export function initUI() {
     const a = btn.dataset.a;
     handleAction(a, btn);
   });
-  root.addEventListener('pointerdown', e => {
-    // 面板内不处理世界点击
-    if (e.target.closest('#panelWrap, #topRight, #statPanel, #hotbar, #menuBtns, #actionBtns, #joystick, #buildBar, #questTracker')) return;
-    handleWorldTap(e);
-  }, true);
+  if (!window._customWorldTap) {
+    root.addEventListener('pointerdown', e => {
+      // 面板内不处理世界点击
+      if (e.target.closest('#panelWrap, #topRight, #statPanel, #hotbar, #menuBtns, #actionBtns, #joystick, #buildBar, #questTracker')) return;
+      handleWorldTap(e);
+    }, true);
+  }
   bus.on('inv', () => { renderHotbar(); if (S.ui.panel) renderPanel(); });
   bus.on('toast', () => renderToasts());
   bus.on('openStation', () => openPanel('station'));
@@ -166,17 +168,24 @@ function moveItem(idx, dir) {
 }
 
 // ---------------- 世界点击（钩子投掷 / 建造放置） ----------------
-function handleWorldTap(e) {
+export function handleWorldTap(e) {
   if (S.mode !== 'play') return;
   // 砍价小游戏进行中：点击=停针
   if (S.bargain) {
     import('./bargain.js').then(m => m.stopBargain());
     return;
   }
-  const view = window._view;
-  if (!view) return;
-  const wx = (e.clientX - view.w / 2) / view.zoom + view.x;
-  const wy = (e.clientY - view.h / 2) / view.zoom + view.y;
+  let wx, wy;
+  if (window._screenToWorld) {
+    const pt = window._screenToWorld(e.clientX, e.clientY);
+    if (!pt) return;
+    wx = pt.x; wy = pt.y;
+  } else {
+    const view = window._view;
+    if (!view) return;
+    wx = (e.clientX - view.w / 2) / view.zoom + view.x;
+    wy = (e.clientY - view.h / 2) / view.zoom + view.y;
+  }
   if (S.ui.buildSel) {
     const c = Math.floor(wx / TILE), r = Math.floor(wy / TILE);
     if (place(S.ui.buildSel, c, r)) bus.emit('inv');

@@ -1,14 +1,15 @@
 # 🌊 怒海孤筏
 
-> **在线游玩：https://yjj0339.github.io/nuhai-gufa/**
+> **2D 版：https://yjj0339.github.io/nuhai-gufa/**
+> **🌊 3D 版（three.js）：https://yjj0339.github.io/nuhai-gufa/3d/**
 
-一款功能丰富的海上木筏生存游戏（纯前端 Canvas 2D，零依赖、免安装、手机电脑都能玩）。
+海上木筏生存游戏。2D 版为纯 Canvas 2D；**3D 版**用 three.js 渲染低多边形明亮世界，玩家/鲨鱼/海豚/鲸鱼/海鸥/克拉肯触手/棕榈由 Blender 5.2 建模导出 GLB，全部游戏系统与 2D 版完全一致（共享同一套逻辑代码）。
 
 ## 🎮 玩法
 
 你被困在茫茫大海的一块小木筏上。用手钩打捞漂流物，扩建木筏，对抗鲨鱼与饥渴，探索群岛，最终修复无线电、找到灯塔岛获救——或者留在无尽模式继续经营你的海上家园。
 
-## ✨ 特性一览
+## ✨ 特性一览（2D/3D 共有）
 
 | 系统 | 内容 |
 |---|---|
@@ -30,18 +31,26 @@
 
 ## 🕹️ 操作
 
-**电脑**：WASD 移动 · 鼠标点水面=扔钩 · 空格=动作（攻击/砍/钓）· E=使用/交互 · Q=潜水/上浮 · 按住 A/D=调帆 · 数字 1-5 切换工具 · B=建造 · Esc=关闭
+**电脑（3D 版）**：WASD 移动（随视角）· 鼠标点水面=扔钩 · 空格=动作 · E=使用 · Q=潜水 · 拖拽=旋转视角 · 滚轮=缩放 · B=建造 · 数字 1-6 切换工具 · M 静音 · P 暂停
 
-**手机**：左下摇杆移动 · 右下四个按钮（使用/动作/钩子/潜水）· 点水面扔钩
+**手机**：左下摇杆移动 · 右下四个按钮（使用/动作/钩子/潜水）· 点水面扔钩 · 单指拖空白处转视角
 
 ## 🛠️ 本地运行
 
 ```bash
-node tools/server.js   # 打印本地+局域网地址
+node tools/server.js          # 2D: / ，3D: /3d/
 ```
 
-测试：`node tools/verify.js`（21 项功能自测+截图）、`node tools/soak.js`（5 游戏天快进浸泡）。
+构建 3D 模型（需 Blender）与 three 运行时：
+
+```bash
+node tools/vendor3d.js        # 复制 three.js 到 vendor/
+blender -b -P tools/build_models.py   # 生成 assets/models/*.glb
+```
+
+测试：`node tools/verify.js`（2D）、3D 版打开 `/3d/?test=1` 页面内 22 步自测；`node tools/soak.js`（逻辑快进浸泡，2D/3D 共用同一套逻辑）。
 
 ## 🧱 技术栈
 
-原生 Canvas 2D + ES Modules，无任何第三方依赖；程序化音频（WebAudio）；所有美术为代码矢量绘制。
+- **2D 版**：原生 Canvas 2D + ES Modules，零依赖
+- **3D 版**：three.js r170（vendored）+ Blender GLB 角色资产；海洋为自定义 Gerstner 波 Shader，昼夜驱动天空渐变/太阳/星空/雾色

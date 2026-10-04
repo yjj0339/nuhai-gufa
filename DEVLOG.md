@@ -1,5 +1,15 @@
 # DEVLOG · 怒海孤筏
 
+## 2026-10-04 · v2.0 3D 版（three.js）
+
+- 新增 `/3d/` 版本：three.js r170（vendored）渲染，与 2D 版**共享全部逻辑模块**（/js/ 下 data/state/inv/upgrades/daily/letters/bargain/quests/audio/save/fishing/player/world/raft/entities/weather/ui 逻辑不动），js3d/ 只写渲染层（scene3d/raft3d/world3d/entities3d/player3d/overlay2d/main3d）。
+- **角色资产**：Blender 5.2 无头建模 8 个 GLB（player/shark/dolphin/whale/gull/fish/tentacle/palm），低多边形+flat shading；部件命名（Tail/WingL/WingR/LegL/ArmR/Fluke 等）供 three 侧按名做程序化动画（尾摆/翅膀扇/走路摆臂）。
+- **海洋**：自定义 ShaderMaterial，三重正弦波顶点位移 + 深浅色混合 + 木筏边缘泡沫圈（uniform 传 bounds）+ 正弦波光（第一版用 hash 方块闪光，丑，已改条带波光）。
+- **昼夜**：驱动天空穹顶渐变、太阳角度/强度/色温、雾色、海色、星空 opacity、月亮位置；夜晚灯柱 PointLight/营火 emissive 真实发光。
+- **坑**：①GLTFLoader 还依赖 utils/BufferGeometryUtils.js（相对导入 404 断链全页面）；②GLB 相对路径相对页面而非模块 → '../assets/models/'；③initPlayer3d 必须等 GLB 加载完否则落兜底占位（玩家变红胶囊）；④无头 WebGL 帧率低，自测等待用 setTimeout 不用帧数；⑤three r170 无 three.core 拆分。
+- 2D ui.js 三处兼容改造（_screenToWorld 回调 / _customWorldTap 自管点击 / export handleWorldTap），对 2D 行为零影响。
+- 3D 自测 22 步全绿（含 GLB 加载数、渲染 drawcalls、3D 地板网格同步计数）；手机端摇杆正常。
+
 ## 2026-10-04 · v1.3 海怪与信件版
 
 - **🦑 克拉肯**：第 10 天起每 7 天一次，4 条触手从木筏四周升起（紫色警戒圈）；触手 hunt→slam 循环：近了拍人下水、远了卷边缘地板；各 4 HP，全灭得战利品（触手/珍珠/古币/几率地图碎片）。攻击优先选触手。
