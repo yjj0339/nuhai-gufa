@@ -4,14 +4,14 @@ import { TILE, CFG, BUILDINGS, ITEMS, SAVE_KEY } from './data.js';
 import { initAudio, resumeAudio, sfx, updateAmbient } from './audio.js';
 import { updateWorld, drawOcean, drawFloaters, drawIslands, nearestIsland } from './world.js';
 import { drawRaft, updateBuildings, drawGhost, demolish, tileAt, canPlace, place } from './raft.js';
-import { updateSharks, updateGulls, updateFish, updateHook, updateParticles, updateUnderNodes, drawUnder, drawOver, updateMerchant, updateDolphin, updateVortices, updateWrecks, updateWhale, updateKraken, drawNewUnder, drawNewOver } from './entities.js';
+import { updateSharks, updateGulls, updateFish, updateHook, updateParticles, updateUnderNodes, drawUnder, drawOver, updateMerchant, updateDolphin, updateVortices, updateWrecks, updateWhale, updateKraken, updateSurvivor, updateCrew, drawNewUnder, drawNewOver } from './entities.js';
 import { updateBargain, stopBargain, drawBargain } from './bargain.js';
 import { updatePlayer, drawPlayer, doHookAt, updateIslandNodes, damagePlayer, doUse, doAttack } from './player.js';
 import { updateFishing, drawFishing } from './fishing.js';
 import { initWeather, updateWeather, drawWeatherOverlay, nightFactor } from './weather.js';
 import { updateQuests } from './quests.js';
 import { newGame, loadGame, saveGame, hasSave } from './save.js';
-import { countItem, startStationCook } from './inv.js';
+import { countItem, countTag, startStationCook } from './inv.js';
 import { grantXP, buyUpgrade, UPG, eff } from './upgrades.js';
 import { initUI, updateHUD, openPanel, closePanel, tickToasts, setupTouch, renderToasts } from './ui.js';
 
@@ -193,6 +193,8 @@ function loop(nowMs) {
     updateWrecks(dt);
     updateWhale(dt);
     updateKraken(dt);
+    updateSurvivor(dt);
+    updateCrew(dt);
     updateBargain(dt);
     if (S.bargain && S.input.attack) { S.input.attack = false; stopBargain(); }
     updateAmbient(dt);
@@ -530,6 +532,26 @@ async function selfTest() {
     S.stats.days = 20;
     updateQuests();
     log('成就奖励发放', countItem('coin') > coinAch0 || S.achievements.size >= 5, `coin+${countItem('coin') - coinAch0}`);
+    // ---- v2.3 船员系统 ----
+    const { updateSurvivor, updateCrew, tryRecruit } = await import('./entities.js');
+    S.survivorTimer = 0; S.time.day = 2;
+    for (let i = 0; i < 40; i++) updateSurvivor(0.1);
+    log('幸存者出现', !!S.survivor);
+    if (S.survivor) {
+      S.player.x = S.survivor.x; S.player.y = S.survivor.y;
+      log('救援上筏', tryRecruit() && S.crew.length === 1 && S.stats.crewRescued === 1, S.crew[0] ? S.crew[0].name + '·' + S.crew[0].roleName : '');
+    }
+    // 渔手自动生产（快进计时）
+    if (S.crew[0]) {
+      S.crew[0].t = 999;
+      const fishBefore = countTag('fish');
+      updateCrew(0.05);
+      log('船员自动生产', countTag('fish') > fishBefore || S.crew[0].role !== 'fisher');
+    }
+    // 存档含船员
+    saveGame(true);
+    const crewN = S.crew.length;
+    log('船员存档', loadGame() && S.crew.length === crewN);
 
     T.pass = T.steps.every(s => s.ok) && ERRS.length === 0;
     T.errors = [...ERRS];
@@ -552,6 +574,16 @@ function boot() {
   // 菜单背景：先建一个世界用于展示
   newGame();
   S.mode = 'menu';
+  // 切后台自动存档
+  document.addEventListener('visibilitychange', () => { if (document.hidden && S.mode === 'play') saveGame(true); });
+  // 升级特效
+  bus.on('levelup', () => {
+    const p = S.player;
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      S.entities.parts.push({ x: p.x, y: p.y - 10, vx: Math.cos(a) * 90, vy: Math.sin(a) * 60 - 40, t: 0.6, max: 0.6, kind: 'star' });
+    }
+  });
   const params = new URLSearchParams(location.search);
   if (params.get('test') === '1') {
     setTimeout(selfTest, 300);

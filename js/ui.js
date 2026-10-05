@@ -114,7 +114,17 @@ export function handleAction(a, btn) {
       else if (a.startsWith('sellItem:')) { sellItem(a.slice(9)); renderPanel(); }
       else if (a.startsWith('setSfx:')) { S.settings.sfx = +a.slice(7); setVolumes(); renderPanel(); }
       else if (a.startsWith('setMus:')) { S.settings.music = +a.slice(7); setVolumes(); renderPanel(); }
-      else if (a.startsWith('setQual:')) { S.settings.quality = a.slice(8); renderPanel(); }
+      else if (a.startsWith('setQual:')) {
+        S.settings.quality = a.slice(8);
+        if (window.__applyQuality) window.__applyQuality(S.settings.quality);
+        toast(S.settings.quality === 'low' ? '已切换流畅画质' : '已切换高画质', '✨');
+        renderPanel();
+      }
+      else if (a === 'toggleEco') {
+        S.settings.eco30 = !S.settings.eco30;
+        toast(S.settings.eco30 ? '🔋 省电模式：30 帧（省电降温）' : '已恢复满帧运行', '🔋');
+        renderPanel();
+      }
       else if (a === 'toggleShake') { S.settings.shake = !S.settings.shake; renderPanel(); }
       else if (a === 'saveNow') { saveGame(); renderPanel(); }
       else if (a === 'bargain') {
@@ -282,6 +292,12 @@ function drawMinimap() {
   for (const v of S.entities.vortices) {
     ctx.fillStyle = '#7A4AB8';
     ctx.beginPath(); ctx.arc(W / 2 + v.x * scale, H / 2 + v.y * scale, 4, 0, 6.29); ctx.fill();
+  }
+  if (S.survivor) {
+    ctx.fillStyle = '#3ac86a';
+    ctx.beginPath(); ctx.arc(W / 2 + S.survivor.x * scale, H / 2 + S.survivor.y * scale, 4, 0, 6.29); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+    ctx.stroke();
   }
   for (const w of S.entities.wrecks) {
     if (w.done) continue;
@@ -491,9 +507,11 @@ function renderPanel() {
         <input type="range" min="0" max="100" value="${s.music * 100}" data-a="musRange"></div>
       <div class="row"><span class="em big">📳</span><div class="grow"><b>屏幕震动</b></div>
         <button class="primary" data-a="toggleShake">${s.shake ? '开' : '关'}</button></div>
-      <div class="row"><span class="em big">✨</span><div class="grow"><b>画质（影响粒子）</b></div>
+      <div class="row"><span class="em big">✨</span><div class="grow"><b>画质（影响粒子与阴影）</b></div>
         <button class="primary ${s.quality === 'high' ? '' : 'dis'}" data-a="setQual:high">高</button>
         <button class="primary ${s.quality === 'low' ? '' : 'dis'}" data-a="setQual:low">低</button></div>
+      <div class="row"><span class="em big">🔋</span><div class="grow"><b>省电模式（30 帧）</b><small>手机发热/耗电快时开启</small></div>
+        <button class="primary ${s.eco30 ? '' : 'dis'}" data-a="toggleEco">${s.eco30 ? '开' : '关'}</button></div>
       <div class="row"><span class="em big">💾</span><div class="grow"><b>手动存档</b><small>每 ${CFG.saveEvery} 秒也会自动保存</small></div>
         <button class="primary" data-a="saveNow">保存</button></div>
       <div class="row"><span class="em big">🗑️</span><div class="grow"><b>删除存档并重新开始</b></div>
@@ -576,6 +594,7 @@ function renderPanel() {
       ['🦑', '击退克拉肯', st.krakenKill + ' 次'],
       ['📖', '信件收集', S.letters.length + ' / 12 封'],
       ['✨', '木筏美观度', `${S.stats.beauty}${S.stats.beauty >= 10 ? '（饥饿-10%）' : S.stats.beauty >= 5 ? '（饥饿-5%）' : ''}`],
+      ['🧑‍🤝‍🧑', '船员', S.crew.length + ' / 3 人'],
       ['💀', '倒下次数', st.deaths],
     ];
     html += `<div class="rows">`;
@@ -607,7 +626,8 @@ function renderPanel() {
       <b>📱 手机操作：</b>左下摇杆移动 · 右下按钮：使用/动作/钩子/潜水 · 点击水面扔钩<br><br>
       <b>🦈 提示：</b>鲨鱼会咬地板，装备矛在它靠近时攻击可击退；防鲨网和加固地板能挡咬。潜水时氧气有限，水下有海草/黏土/沙/石头/矿石/珍珠。海鸥会偷菜，稻草人和营火能吓走它。<br>
       <b>🪱 鱼饵：</b>用棕榈叶合成鱼饵，钓鱼时自动消耗——石斑/金枪鱼/剑鱼上钩率接近翻倍。<br>
-      <b>✨ 美观度：</b>旗子/盆栽/吊椅不只是好看——美观度≥5 饥饿消耗-5%，≥10 再降到-10%。
+      <b>✨ 美观度：</b>旗子/盆栽/吊椅不只是好看——美观度≥5 饥饿消耗-5%，≥10 再降到-10%。<br>
+      <b>🧑‍🤝‍🧑 船员：</b>第 2 天起留意岛屿上的求救者（小地图绿点），救上木筏自动干活：渔手钓鱼、杂工打捞、厨师烤鱼，最多 3 人。
     </div>`;
   }
   p.innerHTML = html;

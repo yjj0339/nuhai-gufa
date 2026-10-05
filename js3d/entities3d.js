@@ -1,4 +1,4 @@
-// ============ 3D 实体：鲨鱼/海鸥/鱼群/海豚/鲸/克拉肯/商筏/漩涡/沉船/水下点/粒子/钩绳 ============
+// ============ 3D 实体：鲨鱼/海鸥/鱼群/海豚/鲸/克拉肯/商筏/漩涡/沉船/水下点/粒子/钩绳/船员 ============
 import * as THREE from 'three';
 import { S, dist } from '../js/state.js';
 import { W2U, cloneModel, modelReady, makeTextSprite } from './scene3d.js';
@@ -10,11 +10,32 @@ function mat(color, opts = {}) {
   return M[k];
 }
 const to3 = (x, y, h = 0) => new THREE.Vector3(x * W2U, h, y * W2U);
+const ROLE_COLORS = { fisher: 0x3e8ea8, deckhand: 0x8a6b3b, cook: 0xc05a4a };
+
+// 用玩家模型克隆一个换色人物（船员/幸存者）
+function makePerson(shirtHex, withHat = true) {
+  let g;
+  if (modelReady('player')) {
+    g = cloneModel('player');
+    g.traverse(o => {
+      if (o.isMesh && o.name === 'Torso') {
+        o.material = o.material.clone();
+        o.material.color.setHex(shirtHex);
+      }
+      if (!withHat && (o.name === 'HatBrim' || o.name === 'HatTop')) o.visible = false;
+    });
+  } else {
+    g = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.35, 4, 8), mat(shirtHex));
+    g.position.y = 0.4;
+  }
+  return g;
+}
 
 const R = {
   sharks: [], gulls: [], fish: [], under: [], vortices: [], wrecks: [],
   merchant: null, dolphin: null, whale: null, kraken: null,
   hook: null, hookLine: null, parts: [], bubbles: [],
+  survivor: null, crew: [], levelFx: [],
 };
 
 function setFace(obj, dirDeg) { obj.rotation.y = -dirDeg; }
@@ -401,6 +422,69 @@ export function syncHook3d(scene, t) {
   pos.setXYZ(1, h.x * W2U, 0.1 + bob, h.y * W2U);
   pos.needsUpdate = true;
   R.hookLine.visible = true;
+}
+
+// ---------------- 幸存者 & 船员 & 升级光环 ----------------
+export function syncPeople3d(scene, t) {
+  // 幸存者
+  const sv = S.survivor;
+  if (!sv) {
+    if (R.survivor) { scene.remove(R.survivor.m); scene.remove(R.survivor.label); R.survivor = null; }
+  } else {
+    if (!R.survivor) {
+      const m = makePerson(0x4a7a9a, false);
+      m.scale.setScalar(1.3);
+      scene.add(m);
+      const label = makeTextSprite('🙋 救命~! 按 使用 救我', { color: '#2878a0' });
+      scene.add(label);
+      R.survivor = { m, label };
+    }
+    R.survivor.m.visible = true;
+    R.survivor.m.position.set(sv.x * W2U, 0.12, sv.y * W2U);
+    R.survivor.m.rotation.y = Math.sin(t * 1.5) * 0.5;
+    const arm = R.survivor.m.getObjectByName('ArmR');
+    if (arm) arm.rotation.z = -2.2 + Math.sin(t * 10) * 0.5;
+    R.survivor.label.visible = true;
+    R.survivor.label.position.set(sv.x * W2U, 1.5, sv.y * W2U);
+  }
+  // 船员
+  while (R.crew.length < S.crew.length) {
+    const i = R.crew.length;
+    const role = S.crew[i].role;
+    const m = makePerson(ROLE_COLORS[role] || 0x8a6b3b, true);
+    m.scale.setScalar(1.25);
+    scene.add(m);
+    const label = makeTextSprite(S.crew[i].name + '·' + S.crew[i].roleName, { color: '#4a4030' });
+    scene.add(label);
+    R.crew.push({ m, label });
+  }
+  for (let i = 0; i < R.crew.length; i++) {
+    const e = R.crew[i], c = S.crew[i];
+    if (!c) { e.m.visible = false; e.label.visible = false; continue; }
+    e.m.visible = true; e.label.visible = true;
+    const bob = Math.sin(t * 2 + i * 2) * 0.03;
+    e.m.position.set(c.slot[0], 0.1 + bob, c.slot[1]);
+    e.m.rotation.y = Math.sin(t * 0.7 + i) * 0.6;
+    e.label.position.set(c.slot[0], 1.35, c.slot[1]);
+  }
+  // 升级光环
+  for (const fx of R.levelFx) {
+    fx.t += 1 / 60;
+    fx.ring.scale.setScalar(0.3 + fx.t * 5);
+    fx.ring.material.opacity = Math.max(0, 0.85 - fx.t * 1.4);
+    if (fx.t > 0.7) fx.ring.visible = false;
+  }
+  R.levelFx = R.levelFx.filter(f => f.t <= 0.7);
+}
+export function spawnLevelRing3d(scene, x, y) {
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.4, 0.045, 6, 26),
+    new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.85 })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(x * W2U, 0.25, y * W2U);
+  scene.add(ring);
+  R.levelFx.push({ ring, t: 0 });
 }
 
 // ---------------- 粒子（水花/气泡） ----------------

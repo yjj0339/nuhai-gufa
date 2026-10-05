@@ -4,7 +4,7 @@ import { CFG, TILE, BUILDINGS, SAVE_KEY } from '../js/data.js';
 import { initAudio, resumeAudio, updateAmbient, setVolumes } from '../js/audio.js';
 import { updateWorld } from '../js/world.js';
 import { updateBuildings, place, tileAt, demolish, hasBuilding } from '../js/raft.js';
-import { updateSharks, updateGulls, updateFish, updateHook, updateParticles, updateUnderNodes, updateMerchant, updateDolphin, updateVortices, updateWrecks, updateWhale, updateKraken } from '../js/entities.js';
+import { updateSharks, updateGulls, updateFish, updateHook, updateParticles, updateUnderNodes, updateMerchant, updateDolphin, updateVortices, updateWrecks, updateWhale, updateKraken, updateSurvivor, updateCrew } from '../js/entities.js';
 import { updatePlayer, doUse, doHookAt, updateIslandNodes, damagePlayer, doAttack } from '../js/player.js';
 import { updateFishing } from '../js/fishing.js';
 import { initWeather, updateWeather } from '../js/weather.js';
@@ -16,10 +16,10 @@ import { updateBargain, stopBargain } from '../js/bargain.js';
 import { initUI, updateHUD, openPanel, closePanel, tickToasts, setupTouch } from '../js/ui.js';
 import { handleWorldTap } from '../js/ui.js';
 
-import { init3d, render3d, updateCamera, setEnvironment, screenToWorld, orbitDrag, orbitZoom, setOrbiting, isOrbiting, loadGLB, getCamYaw, perfTick, scene, renderer, W2U } from './scene3d.js';
+import { init3d, render3d, updateCamera, setEnvironment, screenToWorld, orbitDrag, orbitZoom, setOrbiting, isOrbiting, loadGLB, getCamYaw, perfTick, skyU, scene, renderer, W2U } from './scene3d.js';
 import { initRaft3d, syncRaft3d, updateGhost, raftTileCount3d } from './raft3d.js';
 import { syncWorld3d } from './world3d.js';
-import { syncSharks3d, syncGulls3d, syncFish3d, syncDolphin3d, syncWhale3d, syncKraken3d, syncMerchant3d, syncVortices3d, syncWrecks3d, syncUnder3d, syncHook3d, syncParticles3d } from './entities3d.js';
+import { syncSharks3d, syncGulls3d, syncFish3d, syncDolphin3d, syncWhale3d, syncKraken3d, syncMerchant3d, syncVortices3d, syncWrecks3d, syncUnder3d, syncHook3d, syncParticles3d, syncPeople3d, spawnLevelRing3d } from './entities3d.js';
 import { initPlayer3d, syncPlayer3d } from './player3d.js';
 import { initOverlay, drawOverlay } from './overlay2d.js';
 
@@ -157,12 +157,19 @@ window.addEventListener('wheel', e => {
 // ---------------- 主循环 ----------------
 let lastT = performance.now();
 let saveAcc = 0, questAcc = 0, mouse = { x: 0, y: 0 };
+let ecoAcc = 0;
 
 function loop(nowMs) {
   requestAnimationFrame(loop);
   let dt = (nowMs - lastT) / 1000;
   lastT = nowMs;
   if (dt > 0.08) dt = 0.08;
+  // 省电模式：限 30 帧
+  if (S.settings.eco30 && S.mode === 'play') {
+    ecoAcc += dt;
+    if (ecoAcc < 1 / 30) return;
+    ecoAcc = 0;
+  }
   const playing = S.mode === 'play' && !S.paused;
 
   if (playing) {
@@ -213,6 +220,8 @@ function loop(nowMs) {
     updateWrecks(dt);
     updateWhale(dt);
     updateKraken(dt);
+    updateSurvivor(dt);
+    updateCrew(dt);
     updateBargain(dt);
     if (S.bargain && S.input.attack) { S.input.attack = false; stopBargain(); }
     updateAmbient(dt);
@@ -242,6 +251,7 @@ function loop(nowMs) {
   syncUnder3d(scene, S.t);
   syncHook3d(scene, S.t);
   syncParticles3d(scene);
+  syncPeople3d(scene, S.t);
   syncPlayer3d(S.t);
   // 建造幽灵
   if (S.ui.buildSel && S.mode === 'play' && !S.isTouch) {
@@ -372,6 +382,18 @@ async function boot() {
   _raft = await import('../js/raft.js');
   window.S = S; window.place = place; window.tileAt = tileAt; window.countItem = countItem; window.dist = dist;
   window.scene3d = scene; window.renderer3d = renderer;
+  // 画质实时切换
+  window.__applyQuality = q => {
+    const low = q === 'low';
+    renderer.shadowMap.enabled = !low;
+    if (skyU && skyU.sun) skyU.sun.castShadow = !low;
+    renderer.setPixelRatio(low ? 1 : Math.min(1.35, window.devicePixelRatio || 1));
+    scene.traverse(o => { if (o.isMesh && o.material) o.material.needsUpdate = true; });
+  };
+  // 升级光环
+  bus.on('levelup', () => spawnLevelRing3d(scene, S.player.x, S.player.y));
+  // 切后台自动存档
+  document.addEventListener('visibilitychange', () => { if (document.hidden && S.mode === 'play') saveGame(true); });
   window.doUse = doUse; window.doAttack = doAttack; window.doHookAt = doHookAt; window.damagePlayer = damagePlayer;
   window.startStationCook = startStationCook; window.saveGame = saveGame; window.loadGame = loadGame;
   window.grantXP = grantXP; window.buyUpgrade = buyUpgrade; window.craft = craft;

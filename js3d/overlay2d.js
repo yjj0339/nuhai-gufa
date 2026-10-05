@@ -5,6 +5,7 @@ import { drawFishing } from '../js/fishing.js';
 import { drawBargain } from '../js/bargain.js';
 
 let cv, ctx;
+let uGradCache = null, vinGradCache = null, gradSize = 0;
 
 export function initOverlay() {
   cv = document.getElementById('overlay');
@@ -20,6 +21,25 @@ function resizeOverlay() {
   cv.style.width = window.innerWidth + 'px';
   cv.style.height = window.innerHeight + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  uGradCache = null; vinGradCache = null; gradSize = 0;
+}
+function underwaterGrad(h) {
+  if (!uGradCache || gradSize !== h) {
+    uGradCache = ctx.createLinearGradient(0, 0, 0, h);
+    uGradCache.addColorStop(0, 'rgba(20,90,130,0.34)');
+    uGradCache.addColorStop(1, 'rgba(8,50,80,0.46)');
+    gradSize = h;
+  }
+  return uGradCache;
+}
+function vignette(h) {
+  if (!vinGradCache || gradSize !== h) {
+    vinGradCache = ctx.createRadialGradient(cv.width / (2 * (window.devicePixelRatio || 1)), h / 2, h * 0.32, window.innerWidth / 2, h / 2, h * 0.75);
+    vinGradCache.addColorStop(0, 'rgba(200,40,30,0)');
+    vinGradCache.addColorStop(1, 'rgba(200,40,30,1)');
+    gradSize = h;
+  }
+  return vinGradCache;
 }
 
 export function drawOverlay(view) {
@@ -30,10 +50,7 @@ export function drawOverlay(view) {
   const p = S.player;
   // 水下滤镜
   if (p.swimming) {
-    const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, 'rgba(20,90,130,0.34)');
-    g.addColorStop(1, 'rgba(8,50,80,0.46)');
-    ctx.fillStyle = g;
+    ctx.fillStyle = underwaterGrad(h);
     ctx.fillRect(0, 0, w, h);
     // 气泡弧光
     ctx.strokeStyle = 'rgba(230,250,255,0.25)';
@@ -76,11 +93,11 @@ export function drawOverlay(view) {
   // 低血量晕影
   if (p.hp < 35) {
     const a = (1 - p.hp / 35) * (0.28 + 0.1 * Math.sin(S.t * 4));
-    const g = ctx.createRadialGradient(w / 2, h / 2, h * 0.32, w / 2, h / 2, h * 0.75);
-    g.addColorStop(0, 'rgba(200,40,30,0)');
-    g.addColorStop(1, `rgba(200,40,30,${a})`);
-    ctx.fillStyle = g;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle = vignette(h);
     ctx.fillRect(0, 0, w, h);
+    ctx.restore();
   }
   // 克拉肯警报
   if (S.kraken) {

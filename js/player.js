@@ -5,7 +5,7 @@ import { eff, grantXP } from './upgrades.js';
 import { addItem, countItem, removeItem } from './inv.js';
 import { tileAt, isOnRaft, nearestInteractable, farmInteract, sleepBed, hasBuilding, findBuilding } from './raft.js';
 import { islandWalkable } from './world.js';
-import { tryTakeUnderNode, hitShark, sharkNearPlayer, hitGull, spawnSplash, spawnBubbles, spawnHitStar, tryTakeWreckNode, dolphinNearPlayer, nearestTentacle, hitTentacle } from './entities.js';
+import { tryTakeUnderNode, hitShark, sharkNearPlayer, hitGull, spawnSplash, spawnBubbles, spawnHitStar, tryTakeWreckNode, dolphinNearPlayer, nearestTentacle, hitTentacle, tryRecruit } from './entities.js';
 import { startFishing, stopFishing } from './fishing.js';
 import { sfx } from './audio.js';
 
@@ -259,6 +259,8 @@ export function doUse() {
     tryTakeUnderNode();
     return;
   }
+  // 救援幸存者优先
+  if (tryRecruit()) return;
   // 商筏交易
   const m = S.entities.merchant;
   if (m && dist(p.x, p.y, m.x, m.y) < 85) {

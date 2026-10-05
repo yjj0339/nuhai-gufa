@@ -80,6 +80,7 @@ export function stopFishing(success) {
   if (!g) return;
   if (success) {
     const f = g.fish;
+    if (g.baited) S.stats.baitedFish = 1;
     if (g.baited && (f.id === 'fish_sword' || f.id === 'fish_tuna')) toast('鱼饵起作用了，钓到大鱼！', '🪱');
     if (lucky()) { addItem(f.id, 2, true); toast('🍀 幸运双咬，一竿双鱼！', '🍀'); }
     else addItem(f.id, 1, true);

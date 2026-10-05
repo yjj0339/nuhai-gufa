@@ -1,7 +1,7 @@
 // ============ 实体：鲨鱼 / 海鸥 / 鱼群 / 水下资源 / 钩子 / 粒子 ============
 import { S, rand, randi, dist, clamp, key, toast } from './state.js';
-import { TILE, CFG, ITEMS, FISH, SHOP_STOCK, BUILDINGS } from './data.js';
-import { addItem, grantLoot } from './inv.js';
+import { TILE, CFG, ITEMS, FISH, SHOP_STOCK, BUILDINGS, CREW_NAMES, CREW_ROLES } from './data.js';
+import { addItem, grantLoot, countItem, removeItem } from './inv.js';
 import { grantXP, lucky } from './upgrades.js';
 import { dailyProg } from './daily.js';
 import { tileAt, edgeTiles, hasBuilding } from './raft.js';
@@ -476,6 +476,55 @@ export function drawUnder(ctx, t) {
   }
 }
 export function drawOver(ctx, t) {
+  // 幸存者（岛上挥手）
+  if (S.survivor) {
+    const sv = S.survivor;
+    ctx.save();
+    ctx.translate(sv.x, sv.y);
+    ctx.fillStyle = 'rgba(30,50,60,0.25)';
+    ctx.beginPath(); ctx.ellipse(0, 12, 9, 3.5, 0, 0, 6.29); ctx.fill();
+    const bob = Math.sin(t * 2.4) * 1.6;
+    ctx.translate(0, bob);
+    ctx.fillStyle = '#4A7A9A';
+    ctx.beginPath(); ctx.roundRect(-6, -6, 12, 13, 4); ctx.fill();
+    ctx.fillStyle = '#F2C9A0';
+    ctx.beginPath(); ctx.arc(0, -11, 5.5, 0, 6.29); ctx.fill();
+    // 挥手手臂
+    const wa = sv.wave ? Math.sin(t * 10) * 0.7 - 2.2 : -0.6;
+    ctx.strokeStyle = '#4A7A9A'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.save();
+    ctx.translate(5, -3); ctx.rotate(wa);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -9); ctx.stroke();
+    ctx.fillStyle = '#F2C9A0';
+    ctx.beginPath(); ctx.arc(0, -10, 2.2, 0, 6.29); ctx.fill();
+    ctx.restore();
+    // 求救气泡
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = `rgba(40,120,160,${0.6 + 0.4 * Math.sin(t * 4)})`;
+    ctx.fillText('救命~!', 0, -24);
+    ctx.restore();
+  }
+  // 船员（站筏上）
+  for (let i = 0; i < S.crew.length; i++) {
+    const c = S.crew[i];
+    const cx = c.slot[0] * 48, cy = c.slot[1] * 48;
+    const roleColor = c.role === 'fisher' ? '#3E8EA8' : c.role === 'deckhand' ? '#8A6B3B' : '#C05A4A';
+    ctx.save();
+    ctx.translate(cx, cy + Math.sin(t * 2 + i * 2) * 1.2);
+    ctx.fillStyle = 'rgba(30,50,60,0.22)';
+    ctx.beginPath(); ctx.ellipse(0, 12, 8.5, 3.4, 0, 0, 6.29); ctx.fill();
+    ctx.fillStyle = roleColor;
+    ctx.beginPath(); ctx.roundRect(-6, -6, 12, 13, 4); ctx.fill();
+    ctx.fillStyle = '#F2C9A0';
+    ctx.beginPath(); ctx.arc(0, -11, 5.5, 0, 6.29); ctx.fill();
+    ctx.fillStyle = '#3A3A4A';
+    ctx.beginPath(); ctx.arc(-1.8, -11.5, 1, 0, 6.29); ctx.fill();
+    ctx.beginPath(); ctx.arc(1.8, -11.5, 1, 0, 6.29); ctx.fill();
+    ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(60,60,80,0.85)';
+    ctx.fillText(c.name + '·' + c.roleName, 0, -20);
+    ctx.restore();
+  }
   // 鲨鱼
   for (const s of S.entities.sharks) {
     ctx.save();
@@ -753,6 +802,86 @@ export function tryTakeWreckNode() {
     }
   }
   return false;
+}
+
+// ================= 幸存者 & 船员 =================
+const CREW_SLOTS = [[0.62, 0.62], [-0.62, 0.62], [0.62, -0.62]]; // 木筏中心附近的站位（格坐标偏移）
+
+export function updateSurvivor(dt) {
+  const sv = S.survivor;
+  if (sv) {
+    sv.t = (sv.t || 0) + dt;
+    sv.wave = Math.sin((sv.t || 0) * 4) > 0.4;
+  } else {
+    S.survivorTimer -= dt;
+    if (S.survivorTimer <= 0 && S.mode === 'play' && S.time.day >= 2 && S.crew.length < 3) {
+      S.survivorTimer = rand(260, 400);
+      const cands = S.islands.filter(i => i.type !== 'lighthouse' && dist(0, 0, i.x, i.y) < 2800);
+      if (cands.length) {
+        const isl = cands[randi(0, cands.length - 1)];
+        const a = rand(0, 6.28);
+        S.survivor = { x: isl.x + Math.cos(a) * isl.r * 0.5, y: isl.y + Math.sin(a) * isl.r * 0.5, island: isl.id, t: 0, wave: true };
+        toast('🏝️ 附近岛屿上似乎有人在挥手求救！游过去看看', '🙋');
+        sfx.bell();
+      }
+    }
+    return;
+  }
+  // 超时漂走
+  if (sv.t > 240) { S.survivor = null; S.survivorTimer = rand(150, 260); toast('求救的人等不及，乘木筏漂走了…', '💭'); }
+}
+export function tryRecruit() {
+  const sv = S.survivor;
+  if (!sv) return false;
+  const p = S.player;
+  if (dist(p.x, p.y, sv.x, sv.y) > 70) return false;
+  if (S.crew.length >= 3) { toast('船员已满员（3人）', '⚠️'); return true; }
+  const used = S.crew.map(c => c.name);
+  const pool = CREW_NAMES.filter(n => !used.includes(n));
+  const name = pool[randi(0, pool.length - 1)] || ('船员' + (S.crew.length + 1));
+  const role = CREW_ROLES[S.crew.length];
+  const slot = CREW_SLOTS[S.crew.length];
+  S.crew.push({ name, role: role.id, roleName: role.name, t: role.period * 0.5, slot });
+  S.survivor = null;
+  S.survivorTimer = rand(280, 420);
+  S.stats.crewRescued++;
+  grantXP(25);
+  toast(`🙋 救起了幸存者【${name}】！他成了你的${role.name}——${role.desc}`, '🎉');
+  sfx.achv();
+  return true;
+}
+export function updateCrew(dt) {
+  for (const c of S.crew) {
+    c.t += dt;
+    const role = CREW_ROLES.find(r => r.id === c.role);
+    if (!role || c.t < role.period) continue;
+    c.t = 0;
+    if (c.role === 'fisher') {
+      const fishIds = ['fish_sardine', 'fish_mackerel', 'fish_grouper'];
+      const id = fishIds[randi(0, Math.random() < 0.2 ? 2 : 1)];
+      addItem(id, 1, true);
+      toast(`🎣 船员${c.name}（渔手）钓到了一条 ${ITEMS[id].name}`, '🎣');
+      grantXP(4);
+    } else if (c.role === 'deckhand') {
+      const pool = [['wood', 2], ['plastic', 2], ['palm_leaf', 2], ['scrap', 1]];
+      const [id, n] = pool[randi(0, pool.length - 1)];
+      addItem(id, randi(1, n), true);
+      toast(`🪝 船员${c.name}（杂工）捞回了些物资`, '🪝');
+      grantXP(3);
+    } else if (c.role === 'cook') {
+      // 自动烤鱼：有生鱼且熟鱼不囤积过多
+      let rawId = null;
+      for (const fid of ['fish_sword', 'fish_tuna', 'fish_grouper', 'fish_mackerel', 'fish_sardine', 'fish_lantern']) {
+        if (countItem(fid) > 0) { rawId = fid; break; }
+      }
+      if (rawId && countItem('fish_cooked') < 10) {
+        removeItem(rawId, 1);
+        addItem('fish_cooked', 1, true);
+        toast(`🍢 船员${c.name}（厨师）烤好了一条鱼`, '🍢');
+        grantXP(3);
+      }
+    }
+  }
 }
 
 // ================= 观鲸 =================

@@ -227,6 +227,10 @@ export const ACHIEVEMENTS = [
   { id: 'a_amulet',name: '深渊祝福',     desc: '佩戴海怪护符',         check: s => s.gear.krakenAmulet === true },
   { id: 'a_let6',  name: '故事搜集者',   desc: '收集 6 封漂流瓶信件',  check: s => s.letters.length >= 6 },
   { id: 'a_let12', name: '海上史官',     desc: '集齐全部 12 封信件',   check: s => s.letters.length >= 12 },
+  { id: 'a_crew1', name: '人手充足',     desc: '救起第一名船员',       check: s => s.stats.crewRescued >= 1 },
+  { id: 'a_crew3', name: '满员舰队',     desc: '船员达到 3 人',        check: s => s.crew.length >= 3 },
+  { id: 'a_beau10',name: '温馨家园',     desc: '木筏美观度达到 10',    check: s => s.stats.beauty >= 10 },
+  { id: 'a_baited',name: '愿者上钩',     desc: '用鱼饵钓上一条鱼',     check: s => s.stats.baitedFish >= 1 },
   { id: 'a_end',   name: '灯塔之约',     desc: '完成主线：获救',       check: s => s.stats.rescued >= 1 },
 ];
 
@@ -242,8 +246,18 @@ export const ACH_REWARDS = {
   a_vortex: { coin: 6 }, a_wreck: { coin: 6 }, a_blade: { coin: 8 }, a_ssail: { coin: 8 },
   a_daily5: { coin: 10 }, a_whale: { coin: 6 }, a_meteor: { coin: 5 }, a_barg: { coin: 5 },
   a_kraken: { coin: 15, pearl: 1 }, a_amulet: { coin: 8 }, a_let6: { coin: 8 }, a_let12: { coin: 20 },
+  a_crew1: { coin: 8, fish_cooked: 2 }, a_crew3: { coin: 15, ingot: 2 },
+  a_beau10: { coin: 10 }, a_baited: { coin: 4, bait: 2 },
   a_end: { coin: 30 },
 };
+
+// 船员名字池与角色定义
+export const CREW_NAMES = ['阿浪', '小帆', '老锚', '贝壳', '海月', '阿陀'];
+export const CREW_ROLES = [
+  { id: 'fisher', name: '渔手', desc: '每隔一会儿自己钓鱼', period: 85 },
+  { id: 'deckhand', name: '杂工', desc: '定期打捞附近漂流物', period: 100 },
+  { id: 'cook', name: '厨师', desc: '自动把生鱼烤成熟食', period: 40 },
+];
 
 // ---------------- 岛屿类型 ----------------
 export const ISLAND_TYPES = {

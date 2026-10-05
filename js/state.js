@@ -40,6 +40,9 @@ export const S = {
   letters: [],             // 已收集信件 id
   paused: false,
   prevVolumes: null,
+  crew: [],                // [{name, role, t, slot}]
+  survivor: null,          // {x, y, island}
+  survivorTimer: 260,
   stats: {
     days: 1, collected: 0, fish: 0, cooked: 0, drank: 0, ingots: 0,
     sharkFlee: 0, sharkKill: 0, harvest: 0, islands: 0, chests: 0,
@@ -47,6 +50,7 @@ export const S = {
     diveTake: 0, tiles: 0, lantern: 0, deaths: 0, playTime: 0,
     bossKill: 0, trades: 0, dolphinTime: 0, vortexLoot: 0, wrecks: 0, bought: 0,
     gearBlade: 0, dailyDone: 0, whale: 0, meteorWish: 0, bargainWins: 0, krakenKill: 0, beauty: 0,
+    crewRescued: 0, baitedFish: 0,
   },
   quests: { idx: 0, done: [] },
   achievements: new Set(),

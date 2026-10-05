@@ -33,6 +33,7 @@ export function saveGame(silent = false) {
     gear: S.gear,
     daily: S.daily,
     letters: S.letters,
+    crew: S.crew,
     krakenTimerDay: S.krakenTimerDay,
     lastBossDay: S.lastBossDay,
     islands: S.islands.map(i => ({
@@ -82,6 +83,9 @@ export function loadGame() {
   S.gear = d.gear || { sharkSail: false };
   S.daily = d.daily || { day: 1, id: null, goal: 0, prog: 0, done: false };
   S.letters = d.letters || [];
+  S.crew = (d.crew || []).map(c => ({ ...c }));
+  S.survivor = null;
+  S.survivorTimer = 260;
   S.krakenTimerDay = d.krakenTimerDay || 10;
   S.kraken = null;
   S.lastBossDay = d.lastBossDay || 0;
@@ -93,9 +97,10 @@ export function loadGame() {
   }));
   Object.assign(S.stats, d.stats || {});
   // 旧存档字段兜底
-  for (const k of ['beauty', 'krakenKill', 'gearBlade', 'dailyDone', 'whale', 'meteorWish', 'bargainWins', 'bought', 'wrecks', 'vortexLoot', 'dolphinTime', 'trades']) {
+  for (const k of ['beauty', 'krakenKill', 'gearBlade', 'dailyDone', 'whale', 'meteorWish', 'bargainWins', 'bought', 'wrecks', 'vortexLoot', 'dolphinTime', 'trades', 'crewRescued', 'baitedFish']) {
     if (typeof S.stats[k] !== 'number') S.stats[k] = 0;
   }
+  S.crew = (d.crew || []).map(c => ({ ...c }));
   S.quests = { idx: d.quests?.idx || 0, done: d.quests?.done || [] };
   S.achievements = new Set(d.achievements || []);
   Object.assign(S.settings, d.settings || {});
@@ -132,6 +137,9 @@ export function newGame() {
   S.gear = { sharkSail: false };
   S.daily = { day: 1, id: null, goal: 0, prog: 0, done: false };
   S.letters = [];
+  S.crew = [];
+  S.survivor = null;
+  S.survivorTimer = 260;
   S.kraken = null;
   S.krakenTimerDay = 10;
   S.lastBossDay = 0;
@@ -144,6 +152,7 @@ export function newGame() {
     diveTake: 0, tiles: 9, lantern: 0, deaths: 0, playTime: 0, lighthouse: 0,
     bossKill: 0, trades: 0, dolphinTime: 0, vortexLoot: 0, wrecks: 0, bought: 0,
     gearBlade: 0, dailyDone: 0, whale: 0, meteorWish: 0, bargainWins: 0, krakenKill: 0, beauty: 0,
+    crewRescued: 0, baitedFish: 0,
   };
   S.quests = { idx: 0, done: [] };
   S.achievements = new Set();

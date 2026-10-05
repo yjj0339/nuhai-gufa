@@ -1,5 +1,5 @@
 // ============ 经验 / 等级 / 升级系统 ============
-import { S, toast } from './state.js';
+import { S, toast, bus } from './state.js';
 import { CFG } from './data.js';
 import { sfx } from './audio.js';
 
@@ -42,6 +42,7 @@ export function grantXP(n) {
   }
   if (leveled) {
     toast(`⭐ 升到 Lv.${S.level}！获得 1 升级点（打开 ⭐ 面板使用）`, '🌟');
+    bus.emit('levelup');
     sfx.levelup();
   }
 }
