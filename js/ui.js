@@ -77,7 +77,8 @@ export function initUI() {
   bus.on('openStation', () => openPanel('station'));
   bus.on('openPanel', name => openPanel(name));
   bus.on('closePanel', () => closePanel());
-  setInterval(() => { if (S.ui.panel) renderPanel(); }, 700);
+  // 仅工作台/商店需要自动刷新进度（避免打断设置滑条等交互）
+  setInterval(() => { if (S.ui.panel === 'station' || S.ui.panel === 'shop') renderPanel(); }, 700);
 
   renderHotbar();
 }
@@ -228,7 +229,7 @@ export function updateHUD(dt = 0.25) {
   $('#barHunger').style.width = p.hunger + '%';
   $('#barThirst').style.width = p.thirst + '%';
   $('#barXp').style.width = Math.min(100, S.xp / xpNeed(S.level) * 100) + '%';
-  if (!heavy) { drawMinimap(); return; }
+  if (!heavy) return;
   $('#txtHp').textContent = Math.ceil(p.hp);
   $('#txtHunger').textContent = Math.ceil(p.hunger);
   $('#txtThirst').textContent = Math.ceil(p.thirst);

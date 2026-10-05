@@ -13,7 +13,7 @@ export function hasSave() {
 }
 
 export function saveGame(silent = false) {
-  if (S.mode !== 'play') return;
+  if (S.mode !== 'play' && S.mode !== 'ending') return;
   const d = {
     v: 1,
     time: { ...S.time },
@@ -97,7 +97,7 @@ export function loadGame() {
   }));
   Object.assign(S.stats, d.stats || {});
   // 旧存档字段兜底
-  for (const k of ['beauty', 'krakenKill', 'gearBlade', 'dailyDone', 'whale', 'meteorWish', 'bargainWins', 'bought', 'wrecks', 'vortexLoot', 'dolphinTime', 'trades', 'crewRescued', 'baitedFish']) {
+  for (const k of ['beauty', 'krakenKill', 'gearBlade', 'dailyDone', 'whale', 'meteorWish', 'bargainWins', 'bought', 'wrecks', 'vortexLoot', 'dolphinTime', 'trades', 'crewRescued', 'baitedFish', 'lighthouse', 'lantern']) {
     if (typeof S.stats[k] !== 'number') S.stats[k] = 0;
   }
   S.crew = (d.crew || []).map(c => ({ ...c }));

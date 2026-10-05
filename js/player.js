@@ -102,6 +102,7 @@ function enterWater() {
   p.swimming = true;
   p.oxygen = eff.oxygenMax();
   p._climbCd = 0.8;
+  if (S.fishing) stopFishing(false);
   spawnSplash(p.x, p.y, 12);
   sfx.splash();
   toast('落水了！小心鲨鱼，游回木筏边', '🌊');
@@ -291,6 +292,7 @@ export function doUse() {
     case 'bed': sleepBed(); break;
     case 'chest': S.ui.panel = 'storage'; sfx.open(); break;
     case 'sail':
+      if (!S.sailing.raised && S.kraken) { toast('触手缠住了木筏，无法起航！先斩断触手', '🦑'); sfx.error(); break; }
       S.sailing.raised = !S.sailing.raised;
       S.anchor = false;
       toast(S.sailing.raised ? '帆已升起！Q/E 调整帆向' : '帆已收起', '⛵');

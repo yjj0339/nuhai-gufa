@@ -197,7 +197,7 @@ function loop(nowMs) {
       }
     }
     let sailDX = 0, sailDY = 0;
-    if (S.sailing.raised && !S.anchor) {
+    if (S.sailing.raised && !S.anchor && !S.kraken) {
       const spd = eff.sailSpeed() * (0.55 + 0.75 * S.wind.strength);
       sailDX = Math.cos(S.sailing.angle) * spd * dt;
       sailDY = Math.sin(S.sailing.angle) * spd * dt;

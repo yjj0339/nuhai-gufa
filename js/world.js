@@ -118,6 +118,8 @@ export function updateWorld(dt, sailDX, sailDY) {
       if (isl.chest) { isl.chest.x -= sailDX; isl.chest.y -= sailDY; }
     }
     for (const f of S.entities.floaters) { f.x -= sailDX; f.y -= sailDY; }
+    // 岛上的幸存者随岛一起移动
+    if (S.survivor) { S.survivor.x -= sailDX; S.survivor.y -= sailDY; }
     S.stats.sailed += Math.hypot(sailDX, sailDY) / 10; // 米
   }
   // 漂流物漂移

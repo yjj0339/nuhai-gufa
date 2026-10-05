@@ -1,6 +1,7 @@
 // ============ 3D 实体：鲨鱼/海鸥/鱼群/海豚/鲸/克拉肯/商筏/漩涡/沉船/水下点/粒子/钩绳/船员 ============
 import * as THREE from 'three';
 import { S, dist } from '../js/state.js';
+import { crewSlotPos } from '../js/entities.js';
 import { W2U, cloneModel, modelReady, makeTextSprite } from './scene3d.js';
 
 const M = {};
@@ -462,10 +463,11 @@ export function syncPeople3d(scene, t) {
     const e = R.crew[i], c = S.crew[i];
     if (!c) { e.m.visible = false; e.label.visible = false; continue; }
     e.m.visible = true; e.label.visible = true;
+    const sp = crewSlotPos(i);
     const bob = Math.sin(t * 2 + i * 2) * 0.03;
-    e.m.position.set(c.slot[0], 0.1 + bob, c.slot[1]);
+    e.m.position.set(sp[0], 0.1 + bob, sp[1]);
     e.m.rotation.y = Math.sin(t * 0.7 + i) * 0.6;
-    e.label.position.set(c.slot[0], 1.35, c.slot[1]);
+    e.label.position.set(sp[0], 1.35, sp[1]);
   }
   // 升级光环
   for (const fx of R.levelFx) {
@@ -499,10 +501,10 @@ export function syncParticles3d(scene) {
     const m = R.parts[i], p = drops[i];
     if (!p) { m.visible = false; continue; }
     m.visible = true;
-    m.position.set(p.x * W2U, Math.max(0.02, p.y * W2U + 0.06), 0);
-    // 逻辑粒子 y 是屏幕上抛高度近似 —— 直接用 y 作高度（像素→单位）
-    m.position.y = Math.max(0.02, 0.3 - p.t * 0.5 + 0.2);
-    m.scale.setScalar(Math.max(0.2, p.t / p.max));
+    // 抛物线高度：生命周期中段最高
+    const pr = p.t / p.max;
+    m.position.set(p.x * W2U, 0.08 + 0.5 * pr * (1 - pr) * 4 * 0.25, p.y * W2U);
+    m.scale.setScalar(Math.max(0.2, pr));
   }
   const bubbles = S.entities.bubbles;
   while (R.bubbles.length < bubbles.length) {

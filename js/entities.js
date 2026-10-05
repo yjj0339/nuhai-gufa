@@ -507,7 +507,8 @@ export function drawOver(ctx, t) {
   // 船员（站筏上）
   for (let i = 0; i < S.crew.length; i++) {
     const c = S.crew[i];
-    const cx = c.slot[0] * 48, cy = c.slot[1] * 48;
+    const sp = crewSlotPos(i);
+    const cx = sp[0] * 48, cy = sp[1] * 48;
     const roleColor = c.role === 'fisher' ? '#3E8EA8' : c.role === 'deckhand' ? '#8A6B3B' : '#C05A4A';
     ctx.save();
     ctx.translate(cx, cy + Math.sin(t * 2 + i * 2) * 1.2);
@@ -730,7 +731,11 @@ export function updateVortices(dt) {
             spawnSplash((t.c + 0.5) * TILE, (t.r + 0.5) * TILE, 8);
             S.shakeT = 0.3;
             if (tile.hp <= 0) {
-              if (tile.b) { delete S.cooking[key(t.c, t.r)]; delete S.farmPlots[key(t.c, t.r)]; }
+              if (tile.b) {
+                const vb = BUILDINGS[tile.b.type];
+                if (vb && vb.decor) S.stats.beauty = Math.max(0, S.stats.beauty - (vb.name === '吊椅' ? 2 : 1));
+                delete S.cooking[key(t.c, t.r)]; delete S.farmPlots[key(t.c, t.r)];
+              }
               S.raft.tiles.delete(key(t.c, t.r));
               S.stats.tiles = S.raft.tiles.size;
               toast('漩涡绞碎了一块地板！', '🌀');
@@ -806,6 +811,15 @@ export function tryTakeWreckNode() {
 
 // ================= 幸存者 & 船员 =================
 const CREW_SLOTS = [[0.62, 0.62], [-0.62, 0.62], [0.62, -0.62]]; // 木筏中心附近的站位（格坐标偏移）
+
+// 站位校验：所在地板被咬碎时退回中心板（中心 3x3 永久保留）
+export function crewSlotPos(i) {
+  const c = S.crew[i];
+  if (!c) return CREW_SLOTS[0];
+  const cc = Math.floor(c.slot[0]), rr = Math.floor(c.slot[1]);
+  if (S.raft.tiles.has(cc + ',' + rr) || S.raft.tiles.has(Math.floor(c.slot[0]) + ',' + Math.floor(c.slot[1]))) return c.slot;
+  return [0.31, 0.31];
+}
 
 export function updateSurvivor(dt) {
   const sv = S.survivor;
@@ -956,7 +970,11 @@ export function updateKraken(dt) {
             spawnSplash(tn.x, tn.y, 10);
             S.shakeT = 0.35;
             if (t.hp <= 0) {
-              if (t.b) { delete S.cooking[t.c + ',' + t.r]; delete S.farmPlots[t.c + ',' + t.r]; }
+              if (t.b) {
+                const kb = BUILDINGS[t.b.type];
+                if (kb && kb.decor) S.stats.beauty = Math.max(0, S.stats.beauty - (kb.name === '吊椅' ? 2 : 1));
+                delete S.cooking[t.c + ',' + t.r]; delete S.farmPlots[t.c + ',' + t.r];
+              }
               S.raft.tiles.delete(t.c + ',' + t.r);
               S.stats.tiles = S.raft.tiles.size;
               toast('触手卷走了一块地板！', '🦑');

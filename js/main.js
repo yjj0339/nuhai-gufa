@@ -146,11 +146,18 @@ window.addEventListener('pointermove', e => {
 let lastT = performance.now();
 let acc = 0, saveAcc = 0, questAcc = 0;
 
+let ecoAcc = 0;
 function loop(nowMs) {
   requestAnimationFrame(loop);
   let dt = (nowMs - lastT) / 1000;
   lastT = nowMs;
   if (dt > 0.08) dt = 0.08;
+  // 省电模式：限 30 帧
+  if (S.settings.eco30 && S.mode === 'play') {
+    ecoAcc += dt;
+    if (ecoAcc < 1 / 30) return;
+    ecoAcc = 0;
+  }
   const playing = S.mode === 'play' && !S.paused;
 
   if (playing) {
@@ -170,7 +177,7 @@ function loop(nowMs) {
     }
     // 航行
     let sailDX = 0, sailDY = 0;
-    if (S.sailing.raised && !S.anchor) {
+    if (S.sailing.raised && !S.anchor && !S.kraken) {
       const spd = eff.sailSpeed() * (0.55 + 0.75 * S.wind.strength);
       sailDX = Math.cos(S.sailing.angle) * spd * dt;
       sailDY = Math.sin(S.sailing.angle) * spd * dt;
