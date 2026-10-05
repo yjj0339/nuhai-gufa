@@ -13,7 +13,7 @@ import { newGame, loadGame, saveGame, hasSave } from '../js/save.js';
 import { countItem, startStationCook, craft } from '../js/inv.js';
 import { grantXP, buyUpgrade, eff } from '../js/upgrades.js';
 import { updateBargain, stopBargain } from '../js/bargain.js';
-import { initUI, updateHUD, openPanel, closePanel, tickToasts, setupTouch } from '../js/ui.js';
+import { initUI, updateHUD, openPanel, closePanel, tickToasts, setupTouch, renderHotbar } from '../js/ui.js';
 import { handleWorldTap } from '../js/ui.js';
 
 import { init3d, render3d, updateCamera, setEnvironment, screenToWorld, orbitDrag, orbitZoom, setOrbiting, isOrbiting, loadGLB, getCamYaw, perfTick, skyU, scene, renderer, W2U } from './scene3d.js';
@@ -116,7 +116,11 @@ window.addEventListener('keydown', e => {
   if (k === 'escape') { if (S.ui.buildSel) { S.ui.buildSel = null; } else if (S.ui.panel) closePanel(); }
   if (k >= '1' && k <= '6') {
     const order = ['hook', 'spear', 'spear_metal', 'blade', 'hammer', 'rod'];
-    S.player.tool = order[+k - 1];
+    const want = order[+k - 1];
+    if (want === 'hook' || countItem(want) > 0) {
+      S.player.tool = want;
+      renderHotbar();
+    } else toast(`还没有${{ spear: '木矛', spear_metal: '金属矛', blade: '巨鲨战刃', hammer: '锤子', rod: '鱼竿' }[want] || '该工具'}，先去合成`, '⚠️');
   }
   if (k === 'a') S.input.sailL = true;
   if (k === 'd') S.input.sailR = true;
@@ -229,9 +233,10 @@ function loop(nowMs) {
     if (questAcc > 1) { questAcc = 0; updateQuests(); }
     saveAcc += dt;
     if (saveAcc > CFG.saveEvery) { saveAcc = 0; saveGame(true); }
-    if (S.mode === 'dead' && !document.getElementById('endScreen')) buildEndScreen('dead');
-    if (S.mode === 'ending' && !document.getElementById('endScreen')) { saveGame(true); buildEndScreen('ending'); }
   }
+  // 死亡/结局界面：循环层检测（不依赖当帧是否 playing）
+  if (S.mode === 'dead' && !document.getElementById('endScreen')) buildEndScreen('dead');
+  if (S.mode === 'ending' && !document.getElementById('endScreen')) { saveGame(true); buildEndScreen('ending'); }
   tickToasts(dt);
   perfTick(dt);
   // ===== 同步 3D =====

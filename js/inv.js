@@ -179,6 +179,7 @@ export function buyStock(idx) {
   return true;
 }
 export function sellItem(id) {
+  if (!S.entities.merchant) { toast('商筏不在，卖不了', '💨'); return false; }
   const price = SELL_PRICES[id];
   if (!price || countItem(id) <= 0) return false;
   removeItem(id, 1);

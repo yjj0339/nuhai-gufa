@@ -1,6 +1,6 @@
 // ============ UI：HUD / 面板 / 手机操控 ============
 import { S, bus, toast, clamp, fmtTime } from './state.js';
-import { ITEMS, RECIPES, BUILDINGS, STATION_RECIPES, QUESTS, ACHIEVEMENTS, CFG, TILE, SELL_PRICES, LETTERS } from './data.js';
+import { ITEMS, RECIPES, BUILDINGS, STATION_RECIPES, QUESTS, ACHIEVEMENTS, ACH_REWARDS, CFG, TILE, SELL_PRICES, LETTERS } from './data.js';
 import { countItem, countTag, craft, startStationCook, addItem, buyStock, sellItem } from './inv.js';
 import { canPlace, place, hasBuilding, findBuilding } from './raft.js';
 import { nearestIsland } from './world.js';
@@ -322,7 +322,7 @@ function drawMinimap() {
 }
 
 // ---------------- 热键栏 ----------------
-function renderHotbar() {
+export function renderHotbar() {
   const hb = $('#hotbar');
   if (!hb) return;
   let html = '';
@@ -728,4 +728,7 @@ export function setupTouch() {
   atkBtn.addEventListener('pointerdown', () => { S.input.fishingHold = true; });
   atkBtn.addEventListener('pointerup', () => { S.input.fishingHold = false; });
   atkBtn.addEventListener('pointercancel', () => { S.input.fishingHold = false; });
+  // 安全网：手指滑出按钮后松开，全局兜底解除蓄力
+  window.addEventListener('pointerup', () => { S.input.fishingHold = false; });
+  window.addEventListener('pointercancel', () => { S.input.fishingHold = false; });
 }

@@ -13,7 +13,7 @@ import { updateQuests } from './quests.js';
 import { newGame, loadGame, saveGame, hasSave } from './save.js';
 import { countItem, countTag, startStationCook } from './inv.js';
 import { grantXP, buyUpgrade, UPG, eff } from './upgrades.js';
-import { initUI, updateHUD, openPanel, closePanel, tickToasts, setupTouch, renderToasts } from './ui.js';
+import { initUI, updateHUD, openPanel, closePanel, tickToasts, setupTouch, renderToasts, renderHotbar } from './ui.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#game');
@@ -127,7 +127,11 @@ window.addEventListener('keydown', e => {
   if (k === 'escape') { if (S.ui.buildSel) { S.ui.buildSel = null; updateBuildBar(); } else if (S.ui.panel) closePanel(); }
   if (k >= '1' && k <= '6') {
     const order = ['hook', 'spear', 'spear_metal', 'blade', 'hammer', 'rod'];
-    S.player.tool = order[+k - 1];
+    const want = order[+k - 1];
+    if (want === 'hook' || countItem(want) > 0) {
+      S.player.tool = want;
+      renderHotbar();
+    } else toast(`还没有${{ spear: '木矛', spear_metal: '金属矛', blade: '巨鲨战刃', hammer: '锤子', rod: '鱼竿' }[want] || '该工具'}，先去合成`, '⚠️');
   }
   if (k === 'a' || e.code === 'ArrowLeft') S.input.sailL = true;
   if (k === 'd' || e.code === 'ArrowRight') S.input.sailR = true;
@@ -209,11 +213,12 @@ function loop(nowMs) {
     if (questAcc > 1) { questAcc = 0; updateQuests(); }
     saveAcc += dt;
     if (saveAcc > CFG.saveEvery) { saveAcc = 0; saveGame(true); }
-    if (S.mode === 'dead' && !document.getElementById('endScreen')) buildEndScreen('dead');
-    if (S.mode === 'ending' && !document.getElementById('endScreen')) { saveGame(true); buildEndScreen('ending'); }
   } else {
     S.t += dt * 0.4; // 菜单背景动画
   }
+  // 死亡/结局界面：循环层检测（不依赖当帧是否 playing，避免卡死在死亡状态）
+  if (S.mode === 'dead' && !document.getElementById('endScreen')) buildEndScreen('dead');
+  if (S.mode === 'ending' && !document.getElementById('endScreen')) { saveGame(true); buildEndScreen('ending'); }
   tickToasts(dt);
   render(dt);
   if (S.paused && S.mode === 'play') {
@@ -559,6 +564,18 @@ async function selfTest() {
     saveGame(true);
     const crewN = S.crew.length;
     log('船员存档', loadGame() && S.crew.length === crewN);
+    // ---- 回归：成就面板渲染 + 死亡重开 ----
+    const ui = await import('./ui.js');
+    ui.openPanel('achv');
+    log('成就面板渲染', document.getElementById('panel').innerHTML.includes('成就解锁') || document.getElementById('panel').innerHTML.includes('已解锁'));
+    ui.closePanel();
+    S.player.invul = 0;
+    damagePlayer(9999, null);
+    await frame(30);
+    log('死亡界面出现', !!document.getElementById('endScreen'));
+    document.querySelector('#btnRestart')?.click();
+    await frame(15);
+    log('死亡重开', S.mode === 'play');
 
     T.pass = T.steps.every(s => s.ok) && ERRS.length === 0;
     T.errors = [...ERRS];
