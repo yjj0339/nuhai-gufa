@@ -27,11 +27,39 @@ export function drawOverlay(view) {
   const w = window.innerWidth, h = window.innerHeight;
   ctx.clearRect(0, 0, w, h);
   if (S.mode !== 'play') return;
+  const p = S.player;
+  // 水下滤镜
+  if (p.swimming) {
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, 'rgba(20,90,130,0.34)');
+    g.addColorStop(1, 'rgba(8,50,80,0.46)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    // 气泡弧光
+    ctx.strokeStyle = 'rgba(230,250,255,0.25)';
+    ctx.lineWidth = 30;
+    ctx.strokeRect(-15, -15, w + 30, h + 30);
+  }
+  // 流星
+  for (const m of S.meteors) {
+    ctx.save();
+    ctx.strokeStyle = `rgba(255,250,220,${Math.max(0, m.t)})`;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(m.x, m.y);
+    ctx.lineTo(m.x - Math.cos(m.a) * 64, m.y - Math.sin(m.a) * 64);
+    ctx.stroke();
+    if (m.wish) {
+      ctx.fillStyle = `rgba(255,235,150,${Math.max(0, m.t)})`;
+      ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+      ctx.fillText('✦', m.x, m.y - 4);
+    }
+    ctx.restore();
+  }
   // 钓鱼 / 砍价
   drawFishing(ctx, { w, h });
   drawBargain(ctx, { w, h });
   // 氧气表（游泳时）
-  const p = S.player;
   if (p.swimming) {
     const frac = Math.max(0, p.oxygen / CFG.oxygenMax);
     const bw = 190, bx = w / 2 - bw / 2, by = h - 130;

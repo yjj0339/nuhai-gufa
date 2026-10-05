@@ -1,5 +1,19 @@
 # DEVLOG · 怒海孤筏
 
+## 2026-10-04 · v2.1 沉浸感与深度版
+
+- **玩法新深度（2D/3D 共享逻辑）**：
+  - 🪱 鱼饵：palm_leaf×2→bait×2；startFishing 自动消耗，稀有鱼权重×1.9；带走饵状态在结算 toast 提示。
+  - ✨ 装饰系统：旗帜/盆栽/吊椅三种 decor 建筑，放置 beauty+1/+2、拆除与鲨鱼咬碎会回退；eff.hungerRate 按 beauty≥5/≥10 给 -5%/-10%。
+  - 🎁 成就奖励：ACH_REWARDS 表（未列出默认古币×2），解锁即 grantLoot；成就面板显示奖励；36 个全部配置。
+  - 旧存档兼容：loadGame 对 12 个新增 stats 字段做类型兜底（beauty 曾经 NaN 事故：Object.assign 后 undefined +1）。
+- **3D 沉浸感（js3d）**：
+  - 🤿 潜水相机：swimming 时 camTarget.y→-0.55、camDist×0.75、相机强制沉入水线以下；雾切水下深蓝（near1.5/far16）；overlay 加蓝色渐变滤镜+弧光框。
+  - ⛈️ 雷暴闪电：复用 S.weather.flash，叠加 sun/hemi 强度爆闪与天空白化。
+  - 🌈 彩虹：**天穹 shader 低空色带 + 海面倒影带双方案**（关键教训：俯视相机 FOV52/lookAt 低，任何仰角<26°的相机上缘都是负仰角——天上物体根本进不了画面！最终用海面 shader 的七色倒影带实现，从木筏向 -Z 铺开，绘制顺序放在雾之后防止被稀释）。
+  - 🌠 流星：overlay2d 绘制 S.meteors（线段+✦）。
+- 自测：2D 55 步全绿、3D 22 步全绿；verify/soak 0 报错。
+
 ## 2026-10-04 · v2.0 3D 版（three.js）
 
 - 新增 `/3d/` 版本：three.js r170（vendored）渲染，与 2D 版**共享全部逻辑模块**（/js/ 下 data/state/inv/upgrades/daily/letters/bargain/quests/audio/save/fishing/player/world/raft/entities/weather/ui 逻辑不动），js3d/ 只写渲染层（scene3d/raft3d/world3d/entities3d/player3d/overlay2d/main3d）。

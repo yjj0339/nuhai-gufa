@@ -406,7 +406,7 @@ function renderPanel() {
   }
   else if (which === 'build') {
     html += `<div class="buildCats">`;
-    const cats = [['扩建', ['floor', 'floor_armor']], ['生存', ['purifier', 'grill', 'campfire', 'farm', 'bed']], ['功能', ['smelter', 'chest', 'sail', 'anchor', 'raincatcher']], ['防卫', ['net', 'scarecrow', 'lamp']], ['剧情', ['radio']]];
+    const cats = [['扩建', ['floor', 'floor_armor']], ['生存', ['purifier', 'grill', 'campfire', 'farm', 'bed']], ['功能', ['smelter', 'chest', 'sail', 'anchor', 'raincatcher']], ['防卫', ['net', 'scarecrow', 'lamp']], ['装饰', ['flag', 'plant', 'chair']], ['剧情', ['radio']]];
     for (const [cat, ids] of cats) {
       html += `<h3>${cat}</h3><div class="rows">`;
       for (const id of ids) {
@@ -460,12 +460,15 @@ function renderPanel() {
     html += `</div>`;
   }
   else if (which === 'achv') {
-    html += `<p class="hint">已解锁 ${S.achievements.size} / ${ACHIEVEMENTS.length}</p><div class="rows">`;
+    html += `<p class="hint">已解锁 ${S.achievements.size} / ${ACHIEVEMENTS.length} · 每个成就解锁即发奖励</p><div class="rows">`;
     for (const a of ACHIEVEMENTS) {
       const got = S.achievements.has(a.id);
+      const rw = ACH_REWARDS[a.id] || { coin: 2 };
+      const rwStr = Object.entries(rw).map(([id, n]) => `${ITEMS[id].emoji}×${n}`).join(' ');
       html += `<div class="row ${got ? 'done' : 'locked'}">
         <span class="em big">${got ? '🏆' : '⬜'}</span>
         <div class="grow"><b>${got ? a.name : '???'}</b><small>${a.desc}</small></div>
+        <span class="cost ${got ? 'ok' : ''}">${rwStr}</span>
       </div>`;
     }
     html += `</div>`;
@@ -567,6 +570,7 @@ function renderPanel() {
       ['🤝', '砍价成功', st.bargainWins + ' 次'],
       ['🦑', '击退克拉肯', st.krakenKill + ' 次'],
       ['📖', '信件收集', S.letters.length + ' / 12 封'],
+      ['✨', '木筏美观度', `${S.stats.beauty}${S.stats.beauty >= 10 ? '（饥饿-10%）' : S.stats.beauty >= 5 ? '（饥饿-5%）' : ''}`],
       ['💀', '倒下次数', st.deaths],
     ];
     html += `<div class="rows">`;
@@ -596,7 +600,9 @@ function renderPanel() {
       <b>⌨️ 电脑操作：</b><br>
       WASD/方向键移动 · 鼠标点水面=扔钩 · <b>空格/J</b>=动作(攻击/砍/钓) · <b>E</b>=使用/交互 · <b>Q</b>=潜水/上浮 · <b>Q/E</b>=调帆(按住) · <b>数字1-5</b>=切换工具 · <b>B</b>=建造 · <b>Esc</b>=关面板<br><br>
       <b>📱 手机操作：</b>左下摇杆移动 · 右下按钮：使用/动作/钩子/潜水 · 点击水面扔钩<br><br>
-      <b>🦈 提示：</b>鲨鱼会咬地板，装备矛在它靠近时攻击可击退；防鲨网和加固地板能挡咬。潜水时氧气有限，水下有海草/黏土/沙/石头/矿石/珍珠。海鸥会偷菜，稻草人和营火能吓走它。
+      <b>🦈 提示：</b>鲨鱼会咬地板，装备矛在它靠近时攻击可击退；防鲨网和加固地板能挡咬。潜水时氧气有限，水下有海草/黏土/沙/石头/矿石/珍珠。海鸥会偷菜，稻草人和营火能吓走它。<br>
+      <b>🪱 鱼饵：</b>用棕榈叶合成鱼饵，钓鱼时自动消耗——石斑/金枪鱼/剑鱼上钩率接近翻倍。<br>
+      <b>✨ 美观度：</b>旗子/盆栽/吊椅不只是好看——美观度≥5 饥饿消耗-5%，≥10 再降到-10%。
     </div>`;
   }
   p.innerHTML = html;

@@ -1,6 +1,6 @@
 // ============ 实体：鲨鱼 / 海鸥 / 鱼群 / 水下资源 / 钩子 / 粒子 ============
 import { S, rand, randi, dist, clamp, key, toast } from './state.js';
-import { TILE, CFG, ITEMS, FISH, SHOP_STOCK } from './data.js';
+import { TILE, CFG, ITEMS, FISH, SHOP_STOCK, BUILDINGS } from './data.js';
 import { addItem, grantLoot } from './inv.js';
 import { grantXP, lucky } from './upgrades.js';
 import { dailyProg } from './daily.js';
@@ -169,7 +169,12 @@ function doBite(s, dmg = 1) {
     damagePlayer(CFG.sharkBiteDmg, '鲨鱼咬了你！');
   }
   if (tile.hp <= 0) {
-    if (tile.b) { toast(`${BUILDING_NAME(tile.b.type)}随地板被鲨鱼咬碎了！`, '💥'); delete S.cooking[key(t.c, t.r)]; delete S.farmPlots[key(t.c, t.r)]; }
+    if (tile.b) {
+      const bdef = BUILDINGS[tile.b.type];
+      if (bdef && bdef.decor) S.stats.beauty = Math.max(0, S.stats.beauty - (bdef.name === '吊椅' ? 2 : 1));
+      toast(`${BUILDING_NAME(tile.b.type)}随地板被鲨鱼咬碎了！`, '💥');
+      delete S.cooking[key(t.c, t.r)]; delete S.farmPlots[key(t.c, t.r)];
+    }
     S.raft.tiles.delete(key(t.c, t.r));
     S.stats.tiles = S.raft.tiles.size;
     toast('一块地板被咬碎了！', '💥');

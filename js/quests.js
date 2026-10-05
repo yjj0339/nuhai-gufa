@@ -1,6 +1,6 @@
 // ============ 任务链 & 成就 ============
 import { S, toast } from './state.js';
-import { QUESTS, ACHIEVEMENTS } from './data.js';
+import { QUESTS, ACHIEVEMENTS, ACH_REWARDS } from './data.js';
 import { grantLoot } from './inv.js';
 import { grantXP } from './upgrades.js';
 import { sfx } from './audio.js';
@@ -24,13 +24,15 @@ export function updateQuests() {
       S.mode = 'ending';
     }
   }
-  // 成就
+  // 成就（解锁即发奖励）
   for (const a of ACHIEVEMENTS) {
     if (S.achievements.has(a.id)) continue;
     try {
       if (a.check(S)) {
         S.achievements.add(a.id);
         sfx.achv();
+        const reward = ACH_REWARDS[a.id] || { coin: 2 };
+        grantLoot(reward, `🏆 ${a.name} 奖励`);
         toast(`🏆 成就解锁：${a.name}`, '🏆');
       }
     } catch (e) { /* 忽略单条成就错误 */ }

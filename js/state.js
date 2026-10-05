@@ -46,7 +46,7 @@ export const S = {
     sailed: 0, radioFixed: 0, rescued: 0, rainTime: 0, gullShoo: 0,
     diveTake: 0, tiles: 0, lantern: 0, deaths: 0, playTime: 0,
     bossKill: 0, trades: 0, dolphinTime: 0, vortexLoot: 0, wrecks: 0, bought: 0,
-    gearBlade: 0, dailyDone: 0, whale: 0, meteorWish: 0, bargainWins: 0, krakenKill: 0,
+    gearBlade: 0, dailyDone: 0, whale: 0, meteorWish: 0, bargainWins: 0, krakenKill: 0, beauty: 0,
   },
   quests: { idx: 0, done: [] },
   achievements: new Set(),

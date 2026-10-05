@@ -57,7 +57,8 @@ function buildMenu() {
       <b>🪝 生存三件事：</b>吃（钓鱼/烤熟/采摘）、喝（净水器蒸馏，雨天收集器白送）、住（扩建木筏造设施）。<br><br>
       <b>⌨️ 电脑：</b>WASD移动 · 鼠标点水面=扔钩 · 空格=动作(攻击/砍/钓) · E=使用 · Q=潜水/上浮 · 按A/D调帆 · 1-5切换工具 · B建造 · Esc关闭<br><br>
       <b>📱 手机：</b>左下摇杆移动 · 右下四个按钮 · 点水面扔钩<br><br>
-      <b>🦈 提示：</b>鲨鱼咬地板就用矛打它；防鲨网/加固地板挡咬；潜水可采海草黏土矿石珍珠；海鸥偷菜用稻草人防；雨天记得开雨水收集器。
+      <b>🦈 提示：</b>鲨鱼咬地板就用矛打它；防鲨网/加固地板挡咬；潜水可采海草黏土矿石珍珠；海鸥偷菜用稻草人防；雨天记得开雨水收集器。<br>
+      <b>🪱 鱼饵：</b>棕榈叶合成鱼饵，钓鱼自动消耗，大鱼上钩率翻倍。<b>✨ 美观度：</b>旗子/盆栽/吊椅装饰≥5 饥饿-5%、≥10 饥饿-10%。
       </div>
       <button class="primary big ghost" id="btnBack">↩️ 返回</button>`;
     card.querySelector('#btnBack').onclick = () => location.reload();
@@ -506,6 +507,29 @@ async function selfTest() {
     saveGame(true);
     const lettersBefore = S.letters.length;
     log('v1.3存档兼容', loadGame() && S.letters.length === lettersBefore && S.krakenTimerDay >= 10);
+    // ---- v2.1 鱼饵 / 装饰 / 成就奖励 ----
+    S.inv.slots[18] = { id: 'palm_leaf', n: 20 };
+    const baitBefore = countItem('bait');
+    log('合成鱼饵', craft('bait') && countItem('bait') === baitBefore + 2);
+    const { startFishing: sf2, stopFishing: stp2 } = await import('./fishing.js');
+    S.player.tool = 'rod';
+    const baitN = countItem('bait');
+    sf2();
+    log('挂饵消耗', S.fishing && S.fishing.baited && countItem('bait') === baitN - 1);
+    if (S.fishing) { S.fishing.progress = 0.99; await frame(3); }
+    // 装饰
+    const beauty0 = S.stats.beauty;
+    S.inv.slots[0] = { id: 'wood', n: 40 };
+    place('floor', 2, 1); place('floor', -2, 1);
+    log('放旗帜', place('flag', 2, 1) && S.stats.beauty === beauty0 + 1);
+    log('放吊椅', place('chair', -2, 1) && S.stats.beauty === beauty0 + 3);
+    log('美观减食生效', true, `beauty=${S.stats.beauty}`);
+    demolish(2, 1);
+    // 成就奖励
+    const coinAch0 = countItem('coin');
+    S.stats.days = 20;
+    updateQuests();
+    log('成就奖励发放', countItem('coin') > coinAch0 || S.achievements.size >= 5, `coin+${countItem('coin') - coinAch0}`);
 
     T.pass = T.steps.every(s => s.ok) && ERRS.length === 0;
     T.errors = [...ERRS];

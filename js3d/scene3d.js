@@ -52,9 +52,30 @@ export function init3d() {
     uniforms: {
       top: { value: new THREE.Color(0x8fd8f0) },
       bottom: { value: new THREE.Color(0xd8f2ec) },
+      uRb: { value: 0 },
     },
     vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: 'uniform vec3 top; uniform vec3 bottom; varying vec3 vP; void main(){ float h = clamp(normalize(vP).y * 1.6 + 0.28, 0.0, 1.0); gl_FragColor = vec4(mix(bottom, top, h), 1.0); }',
+    fragmentShader: `
+      uniform vec3 top; uniform vec3 bottom; uniform float uRb;
+      varying vec3 vP;
+      void main(){
+        vec3 dir = normalize(vP);
+        float h = clamp(dir.y * 1.6 + 0.28, 0.0, 1.0);
+        vec3 col = mix(bottom, top, h);
+        // 彩虹：固定方位（世界 -Z 偏西）的低空色带
+        if (uRb > 0.01) {
+          float az = atan(dir.x, -dir.z);
+          float azMask = smoothstep(0.75, 0.25, abs(az));
+          float el = asin(clamp(dir.y, -1.0, 1.0));
+          float band = smoothstep(0.20, 0.12, abs(el - 0.17));
+          if (band > 0.0 && azMask > 0.0) {
+            float t = clamp((el - 0.05) / 0.24, 0.0, 1.0);
+            vec3 rc = t < 0.2 ? vec3(1.0,0.54,0.54) : t < 0.4 ? vec3(1.0,0.77,0.42) : t < 0.6 ? vec3(1.0,0.91,0.54) : t < 0.8 ? vec3(0.62,0.91,0.63) : t < 0.93 ? vec3(0.54,0.78,1.0) : vec3(0.71,0.62,1.0);
+            col = mix(col, rc, band * azMask * uRb * 0.75);
+          }
+        }
+        gl_FragColor = vec4(col, 1.0);
+      }`,
   });
   const sky = new THREE.Mesh(skyGeo, skyMat);
   scene.add(sky);
@@ -88,10 +109,11 @@ export function init3d() {
       uDeep: { value: new THREE.Color(0x2fb4c9) },
       uShallow: { value: new THREE.Color(0x7fe0d6) },
       uFog: { value: new THREE.Color(0xbfe8e2) },
-      uCam: { value: new THREE.Vector3() },
       uRaftMin: { value: new THREE.Vector2(-2, -2) },
       uRaftMax: { value: new THREE.Vector2(2, 2) },
       uFoam: { value: 1 },
+      uRb: { value: 0 },
+      uCam: { value: new THREE.Vector3() },
     },
     vertexShader: `
       uniform float uT;
@@ -116,6 +138,7 @@ export function init3d() {
     fragmentShader: `
       uniform vec3 uDeep; uniform vec3 uShallow; uniform vec3 uFog; uniform vec3 uCam;
       uniform vec2 uRaftMin; uniform vec2 uRaftMax; uniform float uFoam; uniform float uT;
+      uniform float uRb;
       varying vec3 vW; varying float vWave;
       void main(){
         float band = smoothstep(0.15, 0.65, vWave + 0.18);
@@ -129,6 +152,20 @@ export function init3d() {
         float rd = length(re);
         float foam = uFoam * (1.0 - smoothstep(0.0, 0.55, abs(rd - 0.08 - sin(vW.x * 2.2 + vW.z * 1.7) * 0.06)));
         col = mix(col, vec3(0.93, 0.98, 0.97), foam * 0.8);
+        // 彩虹倒影带：从木筏向 -Z 方向海面铺开（在雾之后叠加，不被雾冲淡）
+        if (uRb > 0.01) {
+          float dz = -(vW.z - rc.y);
+          float dx = vW.x - rc.x;
+          float along = dz / max(1.0, abs(dx) * 0.55 + 1.0);
+          float lat = abs(dx) / max(2.0, along);
+          float distMask = smoothstep(2.5, 9.0, along) * (1.0 - smoothstep(38.0, 60.0, along));
+          float azMask = 1.0 - smoothstep(0.16, 0.34, lat);
+          if (distMask > 0.0 && azMask > 0.0) {
+            float tt = clamp((along - 2.5) / 42.0, 0.0, 1.0);
+            vec3 rc6 = tt < 0.17 ? vec3(1.0,0.45,0.4) : tt < 0.34 ? vec3(1.0,0.68,0.32) : tt < 0.5 ? vec3(1.0,0.88,0.42) : tt < 0.67 ? vec3(0.5,0.88,0.55) : tt < 0.84 ? vec3(0.42,0.68,1.0) : vec3(0.6,0.48,1.0);
+            col = mix(col, rc6, distMask * azMask * uRb * 0.55);
+          }
+        }
         // 雾
         float d = distance(vW, uCam);
         float f = smoothstep(30.0, 150.0, d);
@@ -243,26 +280,41 @@ export function setEnvironment(dt, t) {
   const nf = nightFactor3d();
   const stormy = S.weather.type === 'storm' || S.weather.type === 'rain';
   const foggy = S.weather.type === 'foggy';
+  const underwater = S.player.swimming && camera.position.y < 0.05;
+  skyU.underwater = underwater;
   // 天空渐变
   tmpTop.copy(dayTop).lerp(nightTop, nf);
   if (stormy) tmpTop.lerp(setTop, 0.55);
   tmpBot.copy(dayBot).lerp(nightBot, nf);
   if (stormy) tmpBot.lerp(setBot, 0.6);
+  // 雷暴闪电：天光爆闪
+  const flash = S.weather.flash > 0 ? S.weather.flash : 0;
+  if (flash > 0) {
+    tmpTop.lerp(new THREE.Color(0xf4f8ff), Math.min(0.8, flash));
+    tmpBot.lerp(new THREE.Color(0xf4f8ff), Math.min(0.8, flash));
+  }
   skyU.sky.material.uniforms.top.value.copy(tmpTop);
   skyU.sky.material.uniforms.bottom.value.copy(tmpBot);
   // 太阳
   const sunAng = (S.time.frac - 0.25) * Math.PI * 2;
   const sunEl = Math.sin(sunAng);
   skyU.sun.position.set(Math.cos(sunAng) * 46, Math.max(4, sunEl * 40), 20);
-  skyU.sun.intensity = stormy ? 0.9 : 1.1 + Math.max(0, sunEl) * 1.6;
+  skyU.sun.intensity = (stormy ? 0.9 : 1.1 + Math.max(0, sunEl) * 1.6) + flash * 6;
   skyU.sun.color.setHSL(0.09, 0.5, 0.5 + Math.max(0, sunEl) * 0.34);
-  skyU.hemi.intensity = stormy ? 0.55 : 0.85 - nf * 0.45;
-  // 雾
-  tmpFog.copy(fogDay).lerp(fogNight, nf);
-  if (foggy) tmpFog.lerp(fogFoggy, 0.8);
-  scene.fog.color.copy(tmpFog);
-  scene.fog.near = foggy ? 10 : 30;
-  scene.fog.far = foggy ? 70 : (stormy ? 120 : 165);
+  skyU.hemi.intensity = (stormy ? 0.55 : 0.85 - nf * 0.45) + flash * 3;
+  // 雾（水面 / 水下两套）
+  if (underwater) {
+    tmpFog.copy(fogDay).lerp(new THREE.Color(0x0e4a66), Math.max(0.55, nf * 0.85));
+    scene.fog.color.copy(tmpFog);
+    scene.fog.near = 1.5;
+    scene.fog.far = 16;
+  } else {
+    tmpFog.copy(fogDay).lerp(fogNight, nf);
+    if (foggy) tmpFog.lerp(fogFoggy, 0.8);
+    scene.fog.color.copy(tmpFog);
+    scene.fog.near = foggy ? 10 : 30;
+    scene.fog.far = foggy ? 70 : (stormy ? 120 : 165);
+  }
   // 海色
   tmpDeep.copy(deepDay).lerp(deepNight, nf * 0.9);
   if (stormy) tmpDeep.lerp(deepStorm, 0.65);
@@ -276,11 +328,11 @@ export function setEnvironment(dt, t) {
   om.uCam.value.copy(camera.position);
   // 月亮与星星
   skyU.moon.position.set(Math.cos(sunAng + Math.PI) * 300, Math.max(30, -sunEl * 260), -160);
-  skyU.moon.visible = nf > 0.05;
+  skyU.moon.visible = nf > 0.05 && !underwater;
   skyU.stars.material.opacity = nf * (stormy ? 0.15 : 0.95);
   // 雨
   const raining = S.weather.type === 'rain' || S.weather.type === 'storm';
-  skyU.rain.visible = raining;
+  skyU.rain.visible = raining && !underwater;
   if (raining) {
     skyU.rain.position.set(camera.position.x, 0, camera.position.z);
     const arr = skyU.rain.geometry.attributes.position;
@@ -292,6 +344,10 @@ export function setEnvironment(dt, t) {
     }
     arr.needsUpdate = true;
   }
+  // 彩虹强度（天穹色带 + 海面倒影带）
+  const rbA = S.weather.rainbow > 0 ? Math.min(1, S.weather.rainbow / 7) : 0;
+  skyU.sky.material.uniforms.uRb.value = rbA * (0.85 + 0.15 * Math.sin(t * 2));
+  skyU.oceanMat.uniforms.uRb.value = rbA;
   // 木筏泡沫范围
   let minx = 1e9, maxx = -1e9, minz = 1e9, maxz = -1e9;
   for (const tl of S.raft.tiles.values()) {
@@ -314,26 +370,31 @@ export function orbitZoom(delta) {
   camDist = Math.max(5, Math.min(20, camDist + delta * 0.01));
 }
 export function getCamYaw() { return camYaw; }
+export function setCamYaw(v) { camYaw = v; }
 export function isOrbiting() { return orbiting; }
 export function setOrbiting(v) { orbiting = v; }
 
 export function updateCamera(dt) {
   const p = S.player;
-  const tx = p.x * W2U, tz = p.y * W2U;
-  camTarget.x += (tx - camTarget.x) * Math.min(1, dt * 6);
-  camTarget.z += (tz - camTarget.z) * Math.min(1, dt * 6);
-  camTarget.y = 0.4;
+  const wx = p.x * W2U, wz = p.y * W2U;
+  const ty = p.swimming ? -0.55 : 0.4;
+  camTarget.x += (wx - camTarget.x) * Math.min(1, dt * 6);
+  camTarget.z += (wz - camTarget.z) * Math.min(1, dt * 6);
+  camTarget.y += (ty - camTarget.y) * Math.min(1, dt * 4);
+  const distNow = p.swimming ? camDist * 0.75 : camDist;
   const cp = Math.cos(camPitch), sp = Math.sin(camPitch);
-  const cx = camTarget.x + Math.sin(camYaw) * cp * camDist;
-  const cz = camTarget.z + Math.cos(camYaw) * cp * camDist;
-  const cy = camTarget.y + sp * camDist;
+  const cx = camTarget.x + Math.sin(camYaw) * cp * distNow;
+  const cz = camTarget.z + Math.cos(camYaw) * cp * distNow;
+  const cy = camTarget.y + sp * distNow;
   let sx = 0, sy = 0;
   if (S.shakeT > 0 && S.settings.shake) {
     sx = (Math.random() - 0.5) * S.shakeT * 0.8;
     sy = (Math.random() - 0.5) * S.shakeT * 0.8;
   }
-  camera.position.set(cx + sx, cy + sy, cz);
-  camera.lookAt(camTarget.x, camTarget.y + 0.4, camTarget.z);
+  camera.position.set(cx + sx, Math.min(cy, p.swimming ? -0.15 : 99) + (p.swimming ? 0 : 0) + sy, cz);
+  if (p.swimming) camera.position.y = Math.min(camera.position.y, -0.12);
+  // 视点略抬高：海平线入画，远处天空/彩虹可见
+  camera.lookAt(camTarget.x, camTarget.y + 1.5, camTarget.z);
 }
 
 // ---------------- 屏幕坐标 → 逻辑世界坐标（水面拾取） ----------------

@@ -88,7 +88,13 @@ export function place(type, c, r, free = false) {
   if (def.upgrade) { S.raft.tiles.get(key(c, r)).armor = true; }
   else if (type === 'floor') { addTile(c, r); }
   else if (type === 'net') { S.raft.tiles.get(key(c, r)).net = true; }
-  else { S.raft.tiles.get(key(c, r)).b = { type, c, r }; }
+  else {
+    S.raft.tiles.get(key(c, r)).b = { type, c, r };
+    if (def.decor) {
+      S.stats.beauty += type === 'chair' ? 2 : 1;
+      toast(`美观度 +${type === 'chair' ? 2 : 1}（当前 ${S.stats.beauty}）`, '✨');
+    }
+  }
   sfx.place();
   return true;
 }
@@ -100,6 +106,7 @@ export function demolish(c, r) {
     const def = BUILDINGS[t.b.type];
     delete S.cooking[key(c, r)]; delete S.farmPlots[key(c, r)];
     t.b = null;
+    if (def.decor) S.stats.beauty = Math.max(0, S.stats.beauty - (def.name === '吊椅' ? 2 : 1));
     grantLoot(refundHalf(def.cost), '拆回');
     sfx.place();
     return true;
@@ -427,6 +434,39 @@ function drawBuilding(ctx, tl, t) {
       ctx.fillStyle = `rgba(255,${on ? 220 : 160},100,${gl})`;
       ctx.beginPath(); ctx.roundRect(-5, -20, 10, 11, 3); ctx.fill();
       ctx.fillStyle = '#3E4550'; ctx.fillRect(-6, -22, 12, 3);
+      break;
+    }
+    case 'flag': {
+      ctx.strokeStyle = '#7A5A36'; ctx.lineWidth = 3.5;
+      ctx.beginPath(); ctx.moveTo(-4, 14); ctx.lineTo(-4, -16); ctx.stroke();
+      const wave = Math.sin(t * 3) * 2;
+      ctx.fillStyle = '#E85A4A';
+      ctx.beginPath();
+      ctx.moveTo(-4, -16);
+      ctx.quadraticCurveTo(8, -18 + wave, 15, -14 + wave);
+      ctx.lineTo(15, -6 + wave);
+      ctx.quadraticCurveTo(8, -10 + wave, -4, -8);
+      ctx.closePath(); ctx.fill();
+      break;
+    }
+    case 'plant': {
+      ctx.fillStyle = '#B07A45';
+      ctx.beginPath(); ctx.roundRect(-8, 2, 16, 12, 2); ctx.fill();
+      ctx.fillStyle = '#3E8E44';
+      ctx.beginPath(); ctx.arc(0, -2, 6.5, 0, 6.29); ctx.fill();
+      ctx.fillStyle = '#E86A9A';
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath(); ctx.arc(-4 + i * 4, -5 + (i % 2) * 3, 2.2, 0, 6.29); ctx.fill();
+      }
+      break;
+    }
+    case 'chair': {
+      ctx.strokeStyle = '#8A5A2E'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(-10, -10); ctx.lineTo(-10, 12); ctx.moveTo(10, -10); ctx.lineTo(10, 12); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-12, -10); ctx.lineTo(12, -10); ctx.stroke();
+      ctx.fillStyle = '#E8735A';
+      const sway = Math.sin(t * 1.4) * 2;
+      ctx.beginPath(); ctx.roundRect(-8, -8 + sway, 16, 14, 3); ctx.fill();
       break;
     }
     case 'radio': {

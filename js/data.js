@@ -27,6 +27,7 @@ export const ITEMS = {
   ore:        { name: '金属矿石', emoji: '⛰️', type: 'material', stack: 40, desc: '礁石岛与海底的矿石。' },
   seaweed:    { name: '海草',     emoji: '🥬', type: 'material', stack: 40, desc: '水下采集，可以吃也能入药。' },
   feather:    { name: '羽毛',     emoji: '🪶', type: 'material', stack: 30, desc: '海鸥掉落的羽毛。' },
+  bait:       { name: '鱼饵',     emoji: '🪱', type: 'material', stack: 30, desc: '挂上鱼竿，稀有大鱼更容易上钩。' },
   vinegoo:    { name: '藤胶',     emoji: '🟢', type: 'material', stack: 30, desc: '丛林岛藤蔓的胶质。' },
   // 种子
   seed_berry:  { name: '浆果种子', emoji: '🌱', type: 'seed', stack: 20, plant: 'berry',  desc: '种在种植箱里，长出浆果。' },
@@ -75,6 +76,7 @@ export const RECIPES = [
   { id: 'hammer',     out: { hammer: 1 },     in: { wood: 4, scrap: 2, rope: 1 },            desc: '锤子' },
   { id: 'rod',        out: { rod: 1 },        in: { wood: 5, rope: 3, nail: 1 },             desc: '鱼竿' },
   { id: 'seed_berry', out: { seed_berry: 1 }, in: { berry: 2 },                              desc: '留种' },
+  { id: 'bait',       out: { bait: 2 },       in: { palm_leaf: 2 },                          desc: '鱼饵 ×2（钓鱼自动挂饵，稀有大鱼更易上钩）' },
   { id: 'gear_blade', out: { blade: 1 },      in: { shark_tooth: 2, ingot: 2, wood: 2 },     desc: '巨鲨战刃（伤害3，巨鲨掉牙锻造）' },
   { id: 'gear_sail',  out: {},                in: { shark_tooth: 3, cloth: 4, rope: 2 },     gear: 'sharkSail', desc: '鲨鱼皮帆：航行速度 +25%（消耗鲨鱼牙鞣制）' },
   { id: 'gear_amulet',out: {},                in: { tentacle: 2, pearl: 1, rope: 2 },        gear: 'krakenAmulet', desc: '海怪护符：潜水氧气消耗再 -35%（佩戴永久生效）' },
@@ -125,6 +127,10 @@ export const BUILDINGS = {
   lamp:        { name: '灯柱',     emoji: '🏮', cost: { glass: 2, scrap: 4, rope: 1 },    desc: '夜晚照亮周围，夜钓更安全。' },
   net:         { name: '防鲨网',   emoji: '🕸️', cost: { rope: 4, palm_leaf: 8 },          desc: '护住这块地板，鲨鱼咬不了。' },
   radio:       { name: '无线电',   emoji: '📻', cost: { scrap: 8, bolt: 4, glass: 2 }, desc: '建好后用3张地图碎片修复，定位灯塔岛。' },
+  // 装饰（提升美观度：≥5 饥饿-5%，≥10 饥饿-10%）
+  flag:        { name: '旗帜',     emoji: '🚩', cost: { wood: 2, cloth: 1 }, decor: true, desc: '装饰+1美观。让木筏有个家的样子。' },
+  plant:       { name: '盆栽',     emoji: '🌷', cost: { plastic: 2, palm_leaf: 2 }, decor: true, desc: '装饰+1美观。木筏上的一点绿意。' },
+  chair:       { name: '吊椅',     emoji: '🪑', cost: { wood: 3, rope: 2, cloth: 1 }, decor: true, desc: '装饰+2美观。午后摇一摇很惬意。' },
 };
 
 // 建筑界面配方（按站点分组）
@@ -223,6 +229,21 @@ export const ACHIEVEMENTS = [
   { id: 'a_let12', name: '海上史官',     desc: '集齐全部 12 封信件',   check: s => s.letters.length >= 12 },
   { id: 'a_end',   name: '灯塔之约',     desc: '完成主线：获救',       check: s => s.stats.rescued >= 1 },
 ];
+
+// 成就解锁奖励（未列出的默认古币×2）
+export const ACH_REWARDS = {
+  a_day1: { coin: 3 }, a_day7: { coin: 8, water: 2 }, a_day15: { coin: 15, pearl: 1 },
+  a_wood: { nail: 4 }, a_fish: { bait: 4 }, a_night: { coin: 6 },
+  a_shark: { coin: 5 }, a_shark3: { coin: 10, ingot: 1 }, a_isle3: { coin: 5 },
+  a_isle6: { coin: 12 }, a_raft: { coin: 8, nail: 6 }, a_farm: { seed_potato: 2, seed_berry: 2 },
+  a_chef: { coin: 6 }, a_rain: { water: 2 }, a_sail: { coin: 8 }, a_chest: { coin: 8 },
+  a_gull: { feather: 3 }, a_dive: { coin: 6 }, a_full: { coin: 4 }, a_lv5: { coin: 8, glass: 2 },
+  a_trade: { coin: 4 }, a_boss: { coin: 12 }, a_dolph: { coin: 8 },
+  a_vortex: { coin: 6 }, a_wreck: { coin: 6 }, a_blade: { coin: 8 }, a_ssail: { coin: 8 },
+  a_daily5: { coin: 10 }, a_whale: { coin: 6 }, a_meteor: { coin: 5 }, a_barg: { coin: 5 },
+  a_kraken: { coin: 15, pearl: 1 }, a_amulet: { coin: 8 }, a_let6: { coin: 8 }, a_let12: { coin: 20 },
+  a_end: { coin: 30 },
+};
 
 // ---------------- 岛屿类型 ----------------
 export const ISLAND_TYPES = {

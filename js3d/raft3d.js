@@ -164,6 +164,42 @@ const BUILDERS = {
     ant.rotation.z = -0.3;
     g.add(body, panel, led, ant);
   },
+  flag(g) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 1.0, 7), mat(0x7a5a36));
+    pole.position.y = 0.5;
+    const cloth = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.26, 4, 2), new THREE.MeshStandardMaterial({ color: 0xe85a4a, side: THREE.DoubleSide, roughness: 0.9 }));
+    cloth.name = 'flagCloth';
+    cloth.position.set(0.21, 0.84, 0);
+    g.add(pole, cloth);
+  },
+  plant(g) {
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.1, 0.18, 9), mat(0xb07a45));
+    pot.position.y = 0.09;
+    const bush = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), mat(0x3e8e44));
+    bush.position.y = 0.28;
+    bush.scale.y = 0.85;
+    for (let i = 0; i < 3; i++) {
+      const flower = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), mat(0xe86a9a));
+      flower.position.set(Math.cos(i * 2.1) * 0.1, 0.34, Math.sin(i * 2.1) * 0.1);
+      g.add(flower);
+    }
+    g.add(pot, bush);
+  },
+  chair(g) {
+    const ropeM = mat(0x8a5a2e);
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 6), mat(0x6a5038));
+    top.rotation.z = Math.PI / 2;
+    top.position.y = 0.85;
+    for (const sx of [-0.3, 0.3]) {
+      const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.45, 5), ropeM);
+      rope.position.set(sx, 0.62, 0);
+      g.add(rope);
+    }
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.07, 0.36), mat(0xe8735a));
+    seat.name = 'seat';
+    seat.position.y = 0.4;
+    g.add(top, seat);
+  },
 };
 
 export function initRaft3d(scene) {
@@ -245,6 +281,14 @@ export function syncRaft3d(scene, t) {
       clothG.rotation.y = -S.sailing.angle;
       if (cloth) cloth.scale.y = S.sailing.raised ? 1 : 0.12;
     }
+  }
+  // 旗帜飘动 / 吊椅摇摆
+  for (const e of raftRefs.tiles.values()) {
+    if (!e.building) continue;
+    const fc = e.building.getObjectByName('flagCloth');
+    if (fc) fc.rotation.y = Math.sin(t * 3) * 0.35;
+    const seat = e.building.getObjectByName('seat');
+    if (seat) seat.rotation.z = Math.sin(t * 1.3) * 0.08;
   }
   // 灯火动画
   const night = S.time.frac > 0.74 || S.time.frac < 0.24;

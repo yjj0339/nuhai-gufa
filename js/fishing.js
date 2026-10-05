@@ -1,7 +1,7 @@
 // ============ 钓鱼小游戏 ============
 import { S, rand, randi, clamp, toast } from './state.js';
 import { FISH, CFG } from './data.js';
-import { addItem } from './inv.js';
+import { addItem, countItem, removeItem } from './inv.js';
 import { grantXP, lucky } from './upgrades.js';
 import { dailyProg } from './daily.js';
 import { sfx } from './audio.js';
@@ -11,25 +11,36 @@ export function startFishing() {
   const p = S.player;
   if (p.swimming) return;
   if (S.fishing) return;
-  // 必须在筏/岛边缘附近
-  const f = pickFish();
+  // 自动挂饵：有鱼饵消耗一条，稀有大鱼更容易上钩
+  let baited = false;
+  if (countItem('bait') > 0) {
+    removeItem('bait', 1);
+    baited = true;
+    toast('🪱 挂上了鱼饵，今天更容易钓到大鱼', '🪱');
+  }
+  const f = pickFish(baited);
   S.fishing = {
     fishY: 0.5, fishV: 0, fishTarget: 0.5, fishT: 0,
     barY: 0.5, barV: 0, holding: false,
-    progress: 0.35, escape: 0, time: 0,
-    dur: 6 + f.diff * 3, fish: f, done: false,
+    progress: baited ? 0.45 : 0.35, escape: 0, time: 0,
+    dur: 6 + f.diff * 3, fish: f, done: false, baited,
   };
   sfx.open();
   toast('咬钩了！按住 收杆 让绿条追住鱼！', '🎣');
 }
-function pickFish() {
+function pickFish(baited) {
   const night = S.time.frac > 0.78 || S.time.frac < 0.24;
   const pool = FISH.filter(f => !f.nightOnly || night);
+  const rareIds = ['fish_grouper', 'fish_tuna', 'fish_sword', 'fish_lantern'];
   let total = 0;
-  for (const f of pool) total += f.w * (night && !f.nightOnly ? 0.7 : 1);
+  for (const f of pool) {
+    const w = f.w * (night && !f.nightOnly ? 0.7 : 1) * (baited && rareIds.includes(f.id) ? 1.9 : 1);
+    total += w;
+    f._w = w;
+  }
   let r = Math.random() * total;
   for (const f of pool) {
-    r -= f.w * (night && !f.nightOnly ? 0.7 : 1);
+    r -= f._w;
     if (r <= 0) return f;
   }
   return pool[0];
@@ -69,6 +80,7 @@ export function stopFishing(success) {
   if (!g) return;
   if (success) {
     const f = g.fish;
+    if (g.baited && (f.id === 'fish_sword' || f.id === 'fish_tuna')) toast('鱼饵起作用了，钓到大鱼！', '🪱');
     if (lucky()) { addItem(f.id, 2, true); toast('🍀 幸运双咬，一竿双鱼！', '🍀'); }
     else addItem(f.id, 1, true);
     S.stats.fish++;
