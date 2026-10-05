@@ -207,13 +207,18 @@ function doHookAtSafe(wx, wy) {
   import('./player.js').then(m => m.doHookAt(wx, wy));
 }
 
-// ---------------- HUD 刷新 ----------------
-export function updateHUD() {
+// ---------------- HUD 刷新（条每帧，重 DOM 写入 5Hz 节流防卡顿） ----------------
+let hudAcc = 1;
+export function updateHUD(dt = 0.25) {
+  hudAcc += dt;
+  const heavy = hudAcc >= 0.2;
+  if (heavy) hudAcc = 0;
   const p = S.player;
   $('#barHp').style.width = p.hp + '%';
   $('#barHunger').style.width = p.hunger + '%';
   $('#barThirst').style.width = p.thirst + '%';
   $('#barXp').style.width = Math.min(100, S.xp / xpNeed(S.level) * 100) + '%';
+  if (!heavy) { drawMinimap(); return; }
   $('#txtHp').textContent = Math.ceil(p.hp);
   $('#txtHunger').textContent = Math.ceil(p.hunger);
   $('#txtThirst').textContent = Math.ceil(p.thirst);

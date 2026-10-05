@@ -28,7 +28,7 @@ export const eff = {
 // 幸运判定
 export function lucky() { return Math.random() < 0.12 * lv('luck'); }
 
-export function xpNeed(level) { return 40 + 45 * (level - 1); }
+export function xpNeed(level) { return 32 + 36 * (level - 1); }
 
 export function grantXP(n) {
   if (S.mode !== 'play') return;

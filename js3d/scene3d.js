@@ -18,10 +18,10 @@ let orbiting = false;
 // ---------------- 初始化 ----------------
 export function init3d() {
   glCanvas = document.getElementById('gl');
-  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true });
-  renderer.setPixelRatio(Math.min(1.6, window.devicePixelRatio || 1));
+  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(1.35, window.devicePixelRatio || 1));
   renderer.shadowMap.enabled = S.settings.quality !== 'low';
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   scene = new THREE.Scene();
@@ -36,14 +36,15 @@ export function init3d() {
   const sun = new THREE.DirectionalLight(0xfff2dd, 2.2);
   sun.position.set(20, 30, 12);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -16; sun.shadow.camera.right = 16;
-  sun.shadow.camera.top = 16; sun.shadow.camera.bottom = -16;
+  sun.shadow.mapSize.set(1536, 1536);
+  sun.shadow.camera.left = -14; sun.shadow.camera.right = 14;
+  sun.shadow.camera.top = 14; sun.shadow.camera.bottom = -14;
   sun.shadow.camera.far = 90;
   sun.shadow.bias = -0.0004;
   scene.add(sun);
   scene.add(sun.target);
   skyU.hemi = hemi; skyU.sun = sun;
+  const flashColor = new THREE.Color(0xf4f8ff);
 
   // 天空穹顶
   const skyGeo = new THREE.SphereGeometry(420, 24, 14);
@@ -100,7 +101,7 @@ export function init3d() {
   skyU.stars = stars;
 
   // 海洋
-  const oceanGeo = new THREE.PlaneGeometry(760, 760, 128, 128);
+  const oceanGeo = new THREE.PlaneGeometry(760, 760, 96, 96);
   oceanGeo.rotateX(-Math.PI / 2);
   const oceanMat = new THREE.ShaderMaterial({
     fog: false,
@@ -204,6 +205,27 @@ export function resize() {
   camera.updateProjectionMatrix();
 }
 
+// ---------------- 自适应流畅模式 ----------------
+let fpsAcc = 0, fpsN = 0, lowSecs = 0, degraded = false;
+export function perfTick(dt) {
+  if (degraded) return;
+  fpsAcc += dt; fpsN++;
+  if (fpsAcc >= 1) {
+    const fps = fpsN / fpsAcc;
+    fpsAcc = 0; fpsN = 0;
+    if (fps < 40) lowSecs++; else lowSecs = Math.max(0, lowSecs - 1);
+    if (lowSecs >= 3) {
+      degraded = true;
+      skyU.sun.castShadow = false;
+      renderer.shadowMap.enabled = false;
+      renderer.setPixelRatio(1);
+      scene.traverse(o => { if (o.isMesh && o.material) o.material.needsUpdate = true; });
+      import('../js/state.js').then(m => m.toast('⚡ 帧率偏低，已自动切换流畅模式（关闭阴影/降低分辨率）', '⚡'));
+    }
+  }
+}
+export function isDegraded() { return degraded; }
+
 // ---------------- GLB 加载 ----------------
 export function loadGLB(name) {
   if (MODELS[name]) return Promise.resolve(MODELS[name]);
@@ -290,8 +312,8 @@ export function setEnvironment(dt, t) {
   // 雷暴闪电：天光爆闪
   const flash = S.weather.flash > 0 ? S.weather.flash : 0;
   if (flash > 0) {
-    tmpTop.lerp(new THREE.Color(0xf4f8ff), Math.min(0.8, flash));
-    tmpBot.lerp(new THREE.Color(0xf4f8ff), Math.min(0.8, flash));
+    tmpTop.lerp(flashColor, Math.min(0.8, flash));
+    tmpBot.lerp(flashColor, Math.min(0.8, flash));
   }
   skyU.sky.material.uniforms.top.value.copy(tmpTop);
   skyU.sky.material.uniforms.bottom.value.copy(tmpBot);

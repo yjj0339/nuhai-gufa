@@ -86,24 +86,25 @@ def build_player():
     shirt = mat('shirt', (0.91, 0.45, 0.35))
     pants = mat('pants', (0.29, 0.35, 0.47))
     hat = mat('hat', (0.91, 0.78, 0.42))
+    eye = mat('eye', (0.06, 0.07, 0.09))
+    # 全部部件按"面朝 -Y"姿态直建，不做任何单件旋转；整体朝向由 root 旋转统一处理
     legL = box('LegL', (0.11, 0.12, 0.28), (-0.065, 0, 0.14), pants)
     legR = box('LegR', (0.11, 0.12, 0.28), (0.065, 0, 0.14), pants)
     torso = box('Torso', (0.27, 0.16, 0.30), (0, 0, 0.43), shirt)
     armL = box('ArmL', (0.07, 0.07, 0.26), (-0.17, 0, 0.30), shirt)
+    origin_to([armL], (-0.17, 0, 0.43))   # 原点在肩，自然下垂
     armR = box('ArmR', (0.07, 0.07, 0.26), (0.17, 0, 0.30), shirt)
-    origin_to([armL], (-0.17, 0, 0.43))
     origin_to([armR], (0.17, 0, 0.43))
     head = sphere('Head', 0.11, (0, 0, 0.67), skin)
-    brim = cyl('HatBrim', 0.155, 0.02, (0, 0, 0.745), hat, verts=14)
-    top = cyl('HatTop', 0.09, 0.07, (0, 0, 0.78), hat, verts=14)
+    eyeL = sphere('EyeL', 0.016, (-0.04, -0.095, 0.70), eye)
+    eyeR = sphere('EyeR', 0.016, (0.04, -0.095, 0.70), eye)
+    brim = cyl('HatBrim', 0.155, 0.02, (0, 0, 0.755), hat, verts=14)
+    top = cyl('HatTop', 0.09, 0.07, (0, 0, 0.79), hat, verts=14)
     root = bpy.data.objects.new('Player', None)
     bpy.context.collection.objects.link(root)
     root.location = (0, 0, 0)
-    parent(root, [legL, legR, torso, armL, armR, head, brim, top])
-    # 朝向 +X（Blender 前方 -Y，旋转对齐）
-    for o in [legL, legR, torso, armL, armR, head, brim, top]:
-        o.rotation_euler = (0, 0, math.radians(-90))
-        # 绕 Z 转 -90° 后 Y 尺寸变为横向宽度
+    root.rotation_euler = (0, 0, math.radians(90))  # -Y 前身 → +X，一次转整体
+    parent(root, [legL, legR, torso, armL, armR, head, eyeL, eyeR, brim, top])
     export('player', root)
 
 # ============ 鲨鱼 ============

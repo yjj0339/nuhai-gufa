@@ -163,9 +163,9 @@ export function newGame() {
   initGulls();
   initFish();
   initWeather();
-  // 初始物资
-  addItem('wood', 6, true); addItem('plastic', 4, true); addItem('palm_leaf', 4, true);
-  addItem('water', 1, true); addItem('seed_potato', 1, true);
+  // 初始物资（宽裕开局，少一点开场拾荒的磨）
+  addItem('wood', 12, true); addItem('plastic', 6, true); addItem('palm_leaf', 6, true);
+  addItem('water', 2, true); addItem('seed_potato', 1, true); addItem('bait', 2, true);
   S.mode = 'play';
   rollDaily();
   toast('欢迎来到怒海孤筏！用手钩收集漂流物活下去吧', '🌊');

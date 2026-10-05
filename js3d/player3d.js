@@ -46,8 +46,8 @@ export function syncPlayer3d(t) {
   const wx = p.x * W2U, wz = p.y * W2U;
   const bobY = p.swimming ? -0.12 : Math.abs(Math.sin(p.walkT)) * 0.04 * (p.moving ? 1 : 0);
   root.position.set(wx, bobY + (p.swimming ? -0.18 : 0), wz);
-  // 朝向：logic dir 0 = +x 平面 → three rotation.y = -dir
-  const targetRot = -p.dir + Math.PI / 2;
+  // 朝向：logic dir 0 = +x 平面，模型面朝 +X → rotation.y = -dir
+  const targetRot = -p.dir;
   let d = ((targetRot - root.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
   root.rotation.y += d * 0.25;
   // 游泳姿态

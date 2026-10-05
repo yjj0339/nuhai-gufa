@@ -216,7 +216,7 @@ function loop(nowMs) {
     ctx.font = '14px system-ui';
     ctx.fillText('按 P 继续', W / 2, H / 2 + 24);
   }
-  if (playing || S.mode === 'menu' || S.mode === 'help') updateHUD();
+  if (playing || S.mode === 'menu' || S.mode === 'help') updateHUD(dt);
 }
 
 function render(dt) {

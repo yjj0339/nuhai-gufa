@@ -216,17 +216,27 @@ export function syncMerchant3d(scene, t) {
     g.add(deck, cargo1, cargo2, canopy, flagPole, flag, label);
     scene.add(g);
     R.merchant = g;
+    R.merchantLabelSec = -1;
+    R.merchantLabelDisc = -1;
   }
   R.merchant.visible = true;
   R.merchant.position.set(m.x * W2U, Math.sin(m.bob) * 0.05, m.y * W2U);
   const flag = R.merchant.getObjectByName('flag');
   if (flag) flag.rotation.y = Math.sin(m.bob * 2) * 0.3;
+  // 招牌文字：仅在秒数/折扣变化时重建（每帧重建 = 纹理泄漏 + 卡顿）
   const label = R.merchant.getObjectByName('label');
   if (label) {
-    label.material.map.dispose();
-    const ns = makeTextSprite(`🛒 商筏 ${Math.ceil(m.life)}s${(m.discount || 1) < 1 ? ' ✂折' : ''}`, { color: '#5a4a30' });
-    label.material = ns.material;
-    label.scale.copy(ns.scale);
+    const sec = Math.ceil(m.life);
+    const disc = m.discount || 1;
+    if (sec !== R.merchantLabelSec || disc !== R.merchantLabelDisc) {
+      R.merchantLabelSec = sec;
+      R.merchantLabelDisc = disc;
+      const ns = makeTextSprite(`🛒 商筏 ${sec}s${disc < 1 ? ' ✂折' : ''}`, { color: '#5a4a30' });
+      if (label.material.map) label.material.map.dispose();
+      label.material.dispose();
+      label.material = ns.material;
+      label.scale.copy(ns.scale);
+    }
   }
 }
 

@@ -22,8 +22,8 @@ export function startFishing() {
   S.fishing = {
     fishY: 0.5, fishV: 0, fishTarget: 0.5, fishT: 0,
     barY: 0.5, barV: 0, holding: false,
-    progress: baited ? 0.45 : 0.35, escape: 0, time: 0,
-    dur: 6 + f.diff * 3, fish: f, done: false, baited,
+    progress: baited ? 0.48 : 0.4, escape: 0, time: 0,
+    dur: 7 + f.diff * 3, fish: f, done: false, baited,
   };
   sfx.open();
   toast('咬钩了！按住 收杆 让绿条追住鱼！', '🎣');
@@ -67,8 +67,8 @@ export function updateFishing(dt) {
   g.barY = clamp(g.barY + g.barV * dt, 0.08, 0.92);
   if (g.barY <= 0.08 || g.barY >= 0.92) g.barV = 0;
   // 重叠判定
-  const inZone = Math.abs(g.fishY - g.barY) < 0.14;
-  g.progress += (inZone ? 0.28 : -0.17) * dt * (1 / (0.7 + fdiff * 0.3));
+  const inZone = Math.abs(g.fishY - g.barY) < 0.16;
+  g.progress += (inZone ? 0.34 : -0.14) * dt * (1 / (0.7 + fdiff * 0.3));
   g.progress = clamp(g.progress, 0, 1);
   if (g.progress >= 1) return stopFishing(true);
   if (g.time > g.dur && g.progress <= 0.02) return stopFishing(false);

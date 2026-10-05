@@ -16,7 +16,7 @@ import { updateBargain, stopBargain } from '../js/bargain.js';
 import { initUI, updateHUD, openPanel, closePanel, tickToasts, setupTouch } from '../js/ui.js';
 import { handleWorldTap } from '../js/ui.js';
 
-import { init3d, render3d, updateCamera, setEnvironment, screenToWorld, orbitDrag, orbitZoom, setOrbiting, isOrbiting, loadGLB, getCamYaw, scene, renderer, W2U } from './scene3d.js';
+import { init3d, render3d, updateCamera, setEnvironment, screenToWorld, orbitDrag, orbitZoom, setOrbiting, isOrbiting, loadGLB, getCamYaw, perfTick, scene, renderer, W2U } from './scene3d.js';
 import { initRaft3d, syncRaft3d, updateGhost, raftTileCount3d } from './raft3d.js';
 import { syncWorld3d } from './world3d.js';
 import { syncSharks3d, syncGulls3d, syncFish3d, syncDolphin3d, syncWhale3d, syncKraken3d, syncMerchant3d, syncVortices3d, syncWrecks3d, syncUnder3d, syncHook3d, syncParticles3d } from './entities3d.js';
@@ -224,6 +224,7 @@ function loop(nowMs) {
     if (S.mode === 'ending' && !document.getElementById('endScreen')) { saveGame(true); buildEndScreen('ending'); }
   }
   tickToasts(dt);
+  perfTick(dt);
   // ===== 同步 3D =====
   setEnvironment(dt, S.t);
   updateCamera(dt);
@@ -253,7 +254,7 @@ function loop(nowMs) {
   } else updateGhost(null);
   render3d();
   drawOverlay({ w: window.innerWidth, h: window.innerHeight });
-  if (S.mode === 'play') updateHUD();
+  if (S.mode === 'play') updateHUD(dt);
 }
 let _raft = null;
 

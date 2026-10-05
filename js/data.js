@@ -267,10 +267,10 @@ export const CHEST_LOOT = [
 
 // ---------------- 常量调参 ----------------
 export const CFG = {
-  playerSpeed: 150,          // px/s 筏上
-  swimSpeed: 95,             // px/s 游泳
+  playerSpeed: 172,          // px/s 筏上
+  swimSpeed: 112,            // px/s 游泳
   hookRange: 330,            // 手钩射程
-  hookSpeed: 620,
+  hookSpeed: 700,
   oxygenMax: 22,             // 潜水氧气秒数
   hungerRate: 100 / 700,     // 每秒掉
   thirstRate: 100 / 560,
@@ -279,7 +279,7 @@ export const CFG = {
   sharkBiteDmg: 16,
   tileHp: 3,
   sharkHp: 5,
-  sharkRespawn: 70,          // 秒
+  sharkRespawn: 95,          // 秒
   sailSpeed: 46,             // px/s 帆速
   currentSpeed: 9,           // 洋流(漂流物相对速度)
   gullStealTime: 9,

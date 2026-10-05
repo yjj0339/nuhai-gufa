@@ -70,7 +70,7 @@ export function tryTakeUnderNode() {
 // ---------------- 鲨鱼 ----------------
 export function initSharks() {
   S.entities.sharks = [];
-  S.sharkTimer = 50;
+  S.sharkTimer = 85; // 开局宽限期，先熟悉打捞
 }
 export function updateSharks(dt) {
   const sh = S.entities.sharks;
